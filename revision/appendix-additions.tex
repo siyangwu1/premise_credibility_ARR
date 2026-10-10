@@ -1,0 +1,74 @@
+% Added appendix material. Revision color is controlled by main.tex.
+\begin{revision}
+\section{Human assessment of answer neutrality}
+\label{app:human_neutrality}
+The authors report a study of 100 contextual premises sampled from MMLU High School Statistics. Each item was independently judged by three annotators who saw the premise, the original question, and the correct answer. The supplied criterion was whether the added context reveals, supports, or contradicts the answer, with labels helps ($+1$), neutral ($0$), and hurts ($-1$). A premise counted as neutral only if all three labels were zero. The reported count is $94/100$ unanimous-neutral items.
+
+Unanimity is a strict descriptive criterion, not a statistical lower confidence bound on neutrality in a wider population. This audit concerns human-perceived answer relevance in one benchmark; it does not establish model-internal neutrality or rule out offsetting effects in the full perturbation pool. The six other items may reflect disagreement, non-neutrality, or both; their label patterns are needed to characterize them.
+\authorcheck{The $94/100$ result and protocol above are taken from the supplied rebuttal. The per-item annotation CSV, exact instructions, sampling seed and item identifiers, annotator background, and applicable consent, compensation, and review documentation were not available in the inspected files. Attach these records and verify the reported count before submission. No inter-annotator statistic or institutional approval is inferred.}
+
+\section{FreshQA cutoff protocol and results}
+\label{app:freshqa}
+The completed analysis uses the November 24, 2025 FreshQA snapshot and a 50-question subset of a larger curated pool. It contains 25 pre-cutoff facts established by 2022 and 25 post-cutoff facts first established in 2025. The curation excludes false-premise questions and aims to remove post-cutoff items that are scheduled or directly calculable. Questions are matched by annotated question and answer type and reasoning depth; the records retain a match identifier for paired analysis. The same reference date, November 24, 2025, is stated in all experimental arms. These selection criteria reduce measured differences in question structure but cannot remove every difference between historical and recent facts.
+
+The requested models are \texttt{gpt-4.1-2025-04-14}, \texttt{gpt-4.1-mini-2025-04-14}, \texttt{google/gemma-3-27b-it}, and \texttt{meta-llama/llama-3.1-70b-instruct}. The experiment records document June 1, 2024 cutoffs for the two GPT-4.1 models, August 2024 for Gemma 3, and December 2023 for Llama 3.1. Provider identifiers are retained in the generation logs. The documented cutoff is a proxy for plausible knowledge availability, not a guarantee about storage of any individual fact.
+
+For each model--question pair, 20 successful generations are collected in each of four arms: \texttt{original\_a}, \texttt{original\_b}, \texttt{format}, and \texttt{context}. The first two are independent replicates of the canonical prompt. The format arm varies rendering while retaining the question, instructions, date, information content, and order. The context arm prefixes generated premises. There are $50\times4\times4\times20=16{,}000$ successful generations. Failed requests are not scored as answers. The 100-question, 30-sample description in the earlier rebuttal does not describe this completed run.
+
+Core answers are taken from a cached target-blind extraction step, then normalized for case, punctuation, and surface aliases. Explicit inability or unknown responses are assigned a shared abstention category. Correctness is evaluated against answer aliases separately from the cross-condition score. The extraction and alias rules are still potential error sources, and merging abstentions can yield high stability for repeated inability to answer. The cutoff scores are computed with indicator-kernel MMD and cross-comparison separately; the MMD decoding control compares two sample distributions and is not plurality-based self-consistency.
+
+\input{revision/tables/freshqa_per_model.tex}
+
+Confidence intervals use 20,000 bootstrap resamples of the 25 match identifiers, retaining both cutoff bins and all four models within each resampled cluster. The reported uncertainty therefore describes question-pair variation for these models, not a random sample of the population of models. The mean original-accuracy difference is $0.533$ (95\% CI $[0.388,0.672]$). The MMD contextual-stability decrease is $0.030$ ($[0.006,0.054]$), and the format decrease is $0.004$ ($[-0.011,0.019]$).
+
+For MMD, average context-minus-format distance is $0.021$ ($[0.011,0.032]$). The corresponding post-minus-pre interaction is $0.026$ ($[-0.002,0.052]$). The saved analysis also reports a one-sided sign-flip $p=0.041$ for that interaction; we retain the two-sided interval in the main text and do not treat the one-sided result as proof of a mechanism. For cross-comparison, average context-minus-format disagreement is $0.042$ ($[0.024,0.060]$), and its interaction is $0.052$ ($[0.009,0.094]$). Cross-comparison disagreement includes answer concentration as well as condition differences.
+
+The saved analysis places format-minus-decoding distance within an absolute equivalence margin of $0.05$: the 90\% intervals are $[0.008,0.021]$ for MMD and $[0.022,0.047]$ for cross-comparison. Interpretation depends on the substantive justification of that margin. No claim that the margin or directional tests were preregistered is made without a dated analysis plan.
+
+\section{TopicMisinfo protocol and estimator sensitivity}
+\label{app:topicmisinfo}
+The analyzed sample comprises 50 claims drawn from the 160-claim TopicMisinfo pool, stratified by topic with seed 42. The allocation is 13 USA, 6 Abortion, 8 Gold, 4 LGBTQ, 4 Illegal Immigration, 4 Black Americans, 3 Entertainment, 3 Health/Science, 3 Weather/Climate, and 2 Sports claims, following the dataset's topic labels. Fourteen models have cached original and contextual responses. Each condition contains 20 response slots per claim. Models rate likely disproportionate harm to demographic groups on a six-point scale from the perspective of a statistically average person, preserving that perspective in the contextual condition.
+
+We form a reference by equally weighting the available male- and female-annotator mean ratings for a claim. This is an analysis choice for this dataset, not an estimate of a demographically representative population mean. Original model ratings are averaged after extraction, and alignment is defined as an absolute difference of at most one Likert point. A claim is retained for a model only if both conditions have 20 nonempty response slots and at least five successfully extracted ratings each. Invalid ratings are excluded from the categorical score; identifiable refusals are recorded separately. This yields 663 model--claim pairs and 34--50 claims per model. Selective refusal or parsing failures can therefore affect the analyzed sample.
+
+\paragraph{Scores and averaging.}
+The original self-consistency comparator is the most frequent rating's share. The added same-prompt comparator is the proportion of agreeing distinct original-response pairs. The concentration comparator is $1-H(p)/\log 6$, where $H$ is empirical categorical entropy. The three contextual scores are the clipped unbiased indicator-kernel MMD score, total-variation stability, and cross-comparison agreement, as defined in Section~\ref{sec:c3}. These controls use the same cached original samples and require no new model calls. ECE uses ten equal-width score bins and the binary alignment label. AUROC and average precision are computed within each model and then averaged equally across models. AUPRC-N uses reversed scores and negative alignment labels.
+
+\input{revision/tables/topicmisinfo_per_model.tex}
+
+\paragraph{Common-claim sensitivity.}
+Only 25 claims meet the retention criteria for all 14 models. Restricting every method and model to that common set preserves the ECE advantage of cross-comparison over plurality, but does not establish a ranking advantage over pairwise agreement or concentration (Table~\ref{tab:topic_common}). This is a complete-case sensitivity analysis, not a correction for potentially informative missingness. The full per-instance scores and retained counts accompany the revision.
+\end{revision}
+
+\begin{table*}[t]
+\centering\small\revisioncolor
+\begin{tabular}{lrrrr}
+\toprule
+Score & ECE $\downarrow$ & AUROC $\uparrow$ & AUPRC-P $\uparrow$ & AUPRC-N $\uparrow$\\
+\midrule
+\input{revision/tables/topicmisinfo_common_rows.tex}
+\bottomrule
+\end{tabular}
+\caption{TopicMisinfo sensitivity restricted to the 25 claims retained for all 14 models. All reported values are macro averages.}
+\label{tab:topic_common}
+\end{table*}
+
+\begin{revision}
+\paragraph{Alignment-threshold sensitivity.}
+We additionally recompute the labels using tolerances of $0.5$ and $1.5$ Likert points (Table~\ref{tab:topic_tolerance}). Changing the tolerance changes the target event and its prevalence, so comparisons should be made within each tolerance. The scores are not recalibrated. The experiment does not establish that a single threshold captures all relevant aspects of opinion alignment.
+\input{revision/tables/topicmisinfo_thresholds.tex}
+
+\section{Author review and remaining validation}
+\label{app:revision_audit}
+\authorcheck{Original benchmark provenance. The existing six-benchmark table and appendix tables are preserved numerically. The source describes 16 main models plus 10 additional MMLU models, but the exact included rows, counts, sample retention, score transformations, and macro-versus-pooled aggregation must be tied to generating outputs. Located notebooks contain both TV and cosine-MMD implementations. Do not describe all original C3 rows as one verified unbiased-MMD estimator.}
+
+\authorcheck{New-study counts and naming. This revision uses the completed 50-question, four-arm FreshQA run and the 14-model, 50-claim TopicMisinfo run. Reproduced cross-comparison values match the supplied rebuttal, but its larger sample-count descriptions and MMD label do not. Confirm these reconciled records before submission.}
+
+\authorcheck{Answer-equivalence validation. The original appendix supplies a code-completion judge prompt. Add the exact task-specific extraction and comparison prompts, judge versions, and any completed human agreement or order-sensitivity audit. No additional judge-validation result has been invented.}
+
+\authorcheck{Perturbation components. Source substitution does not independently ablate topic alignment, answer neutrality, and diversity. A controlled component study remains proposed, not completed. If undertaken, explicitly separate answer-relevant positive controls from intended neutral premises and match context length and sampling budgets.}
+
+\authorcheck{Statistical and computational scope. The added TopicMisinfo baseline, common-claim, and threshold checks are offline reanalyses of existing responses. Their descriptive differences have not been labeled statistically significant. The FreshQA cluster intervals describe the fixed four-model comparison. No measured generation-cost or end-to-end speed advantage is claimed.}
+
+\authorcheck{Submission preparation. The red-marked and clean-color versions share one source. Limitations and Ethical considerations follow the conclusion for ARR. The eight-page content limit, float placement, references, and final red rendering must be verified in a LaTeX build; this editing environment currently has no LaTeX compiler and cannot resolve the compiler download host. The clean-color copy retains these notes until the underlying checks are resolved.}
+\end{revision}

@@ -99,6 +99,28 @@ escapeinside={(*}{*)}
 % EDITING
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+% Red marks text added or substantively rewritten against revision/baseline/main.tex.
+% main-clean.tex defines CleanCopy and uses this same manuscript with color disabled.
+\newif\ifrevisionmarkup
+\ifdefined\CleanCopy\revisionmarkupfalse\else\revisionmarkuptrue\fi
+\DeclareRobustCommand{\revisioncolor}{\ifrevisionmarkup\color{red}\fi}
+\DeclareRobustCommand{\revised}[1]{{\revisioncolor #1}}
+\newenvironment{revision}{\par\begingroup\revisioncolor}{\par\endgroup}
+\newcommand{\authorcheck}[1]{\par\noindent\revised{\textbf{Author review needed.} #1}\par}
+\usepackage{xparse}
+\usepackage{etoolbox}
+% Newly cited bibliography items are also red in the marked version.
+\newcommand{\revisionbibkey}[1]{\csdef{revisionbib@#1}{}}
+\AtBeginDocument{%
+  \let\originalbibitem\bibitem
+  \RenewDocumentCommand{\bibitem}{o m}{%
+    \color{black}%
+    \IfNoValueTF{#1}{\originalbibitem{#2}}{\originalbibitem[#1]{#2}}%
+    \ifcsdef{revisionbib@#2}{\revisioncolor}{}%
+  }%
+}
+\AtEndEnvironment{thebibliography}{\color{black}}
+
 \newcommand{\edit}[1]{\textcolor{red}{\textbf{[#1]}}}
 \newcommand{\hilite}[1]{\textcolor{red}{#1}}
 \newcommand{\note}[1]{\textcolor{blue}{\textbf{\texttt{[#1]}}}}
@@ -144,223 +166,99 @@ Chicago, USA \\
 % DOCUMENT
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+\revisionbibkey{chen-etal-2024-self-para}
+\revisionbibkey{farquhar2024semantic}
+\revisionbibkey{gao-etal-2024-spuq}
+\revisionbibkey{neumann2026opinions}
+\revisionbibkey{vu-etal-2024-freshllms}
+\revisionbibkey{wang2026paraphrasing}
+\revisionbibkey{wen2025scenario}
 \begin{document}
-
 \maketitle
 
-% Paper content starts here.
-
-% You may provide any keywords that you
-% find helpful for describing your paper; these are used to populate
-% the ``keywords'' metadata in the PDF but will not be shown in the document
-
-
-
-% this must go after the closing bracket ] following \twocolumn[ ...
-
-% This command actually creates the footnote in the first column
-% listing the affiliations and the copyright notice.
-% The command takes one argument, which is text to display at the start of the footnote.
-% The \icmlEqualContribution command is standard text for equal contribution.
-% Remove it (just {}) if you do not need this facility.
-
-%\printAffiliationsAndNotice{}  % leave blank if no need to mention equal contribution
-%\printAffiliationsAndNotice{\icmlEqualContribution} % otherwise use the standard text.
-
-% \begin{abstract}
-% Large language models (LLMs) are powerful black-box systems, making it difficult to discern whether their answers reflect
-% stable internal beliefs or superficial pattern matching. To address this limitation, we propose Cross-Contextual Consistency (C3) as a metric to quantify model credibility by
-% measuring the distributional shift induced by controlled, semantically neutral prompt perturbations. 
-% The C3 framework is not constrained by question format, applying naturally to open-ended, long-form generation. 
-% Evaluating C3 across 26 models and six benchmarks, including reasoning, factuality, and coding, shows that C3 is an appropriate measure of credibility: Models and task instances with smaller distributional shifts are significantly more likely to be successful on downstream tasks. 
-% Experimental results also demonstrate that C3 provides a complementary axis of evaluation and can serve as a benchmark usefulness diagnostic, identifying which portions of a benchmark remain informative even when aggregate scores are widely considered \emph{saturated}.
-% \end{abstract}
-
-
 \begin{abstract}
-Large language models (LLMs) are powerful black-box systems, making it difficult to discern whether their answers reflect stable internal beliefs or superficial pattern matching.
-We identify \textbf{cross-contextual consistency} as an underutilized behavioral property of LLMs: a credible answer should remain stable when the same task is placed under topic-aligned, content-neutral contextual variation. Building on this intuition, we operationalize Cross-Contextual Consistency (C3) by comparing model generations under original and perturbed prompts. Across 26 models and six benchmarks spanning reasoning, factuality, and code generation, we find that answers with smaller cross-contextual shifts are more likely to be correct or factual. We demonstrate that C3 provides a complementary axis of evaluation and can serve as a benchmark usefulness diagnostic, identifying which portions of a benchmark remain informative even when aggregated scores are widely considered ``saturate".
+\revised{Large language models can repeat an answer while remaining sensitive to irrelevant context. We study Cross-Contextual Consistency (C3), a behavioral diagnostic that keeps the original task unchanged and compares generations before and after adding topic-aligned context intended to be answer-neutral. The original evaluation covers six reasoning, factuality, and code benchmarks, with 16 main models and additional MMLU case studies. We extend it with a matched FreshQA cutoff analysis, human validation of perturbations, and an opinion-alignment task. The cutoff analysis finds a larger contextual distributional shift for post-cutoff facts, although it does not identify the internal cause of individual answers. On opinion ratings, cross-comparison improves calibration relative to plurality-based self-consistency, while MMD performs worse and stronger same-prompt controls remain competitive. These results motivate distinguishing contextual distributional stability from answer concentration. C3 complements task-specific quality evaluation; it neither certifies truthfulness nor uniquely diagnoses knowledge-grounded reasoning.}
 \end{abstract}
-
+\begin{revision}
 \section{Introduction}
+Large language models (LLMs) achieve strong benchmark performance, yet their answers can change when apparently irrelevant context is added. Failures such as the reversal curse and context hijacking illustrate gaps between successful answers and stable behavior~\citep{berglund2024the,jiang2024llms}. Standard accuracy measures whether an answer is right in the tested setting. It does not establish whether the same task elicits a similar answer distribution in another answer-neutral context.
 
-% \note{model credibility $\iff$ witness credibility in jury trials}
+Repeated-sampling methods estimate agreement or uncertainty under one prompt~\citep{DBLP:conf/iclr/0002WSLCNCZ23,kuhn2023semantic}. Prompt reformulation methods instead vary the question's expression~\citep{portillo-wightman-etal-2023-strength,chen-etal-2024-self-para}. We study a complementary intervention: preserve the question, instruction, and answer format, and prefix a short contextual premise that is related to the task domain but intended to provide no answer-relevant information. Cross-Contextual Consistency (C3) compares the resulting original and perturbed generations (Figure~\ref{fig:workflow}). Its distinguishing design choice is the controlled contextual intervention, rather than consistency alone.
 
-% \note{incorrect answers stay incorrect after perturbation}
+This protocol requires sampled outputs from the evaluated model, without logits or hidden states. Auxiliary models generate contextual premises and, for some output formats, compare answers. Correctness labels and external reference sources are used to evaluate the diagnostic, not to compute its contextual stability score. This separation makes the procedure applicable across output formats, but does not remove the cost or possible bias of its auxiliary components.
 
-Large language models (LLMs) achieve strong performance across a wide range of tasks, yet the internal basis of their responses remains poorly understood. 
-In contrast to this strong performance, LLMs often fail to preserve logical consistency: For example, the \emph{reversal curse} \citep{berglund2024the} illustrates the failure to correctly associate facts that logically entail one another, while \emph{context hijacking} \citep{jiang2024llms} shows that appending semantically neutral context can trick LLMs into changing their answers. These examples show that despite their incredible performance on a variety of challenging tasks, LLMs can still fail at basic logical reasoning.
-% To assess this, standard evaluations assess models by querying them directly, but such evaluations provide limited insight into whether the resulting answers are reliable or reflect stable internal beliefs. 
-What's more, these failures are often unpredictable and manifest in surprising and unusual behaviours.
-This motivates the need for principled approaches to directly assess model credibility and its relationship to performance and accuracy on downstream tasks.
+Our evaluation addresses three questions. Does contextual probing predict task-specific answer quality across reasoning, factuality, and code generation? Does its behavior differ from decoding and formatting controls when plausible knowledge availability changes? Can it inform alignment with human judgments when there is no single factual answer? We retain the original six-benchmark evaluation, add a four-model FreshQA cutoff study, and evaluate 14 models on TopicMisinfo. Human judgments provide a separate check of perturbation neutrality.
 
-% Despite their black-box nature, certain 
-One popular approach is to exploit certain internal signals of large language models for evaluation. Token-level probabilities, for example, are commonly used in multiple-choice benchmarks to assess calibration~\citep{kapoor2024large, pmlr-v239-ren23a}. As powerful as these approaches can be in principle, these methods cannot be applied on closed-source models and, more critically, cannot handle free-form questions and open-ended responses. Other widely used methods such as self-report~\citep{lin2022teaching}, self-consistency~\citep{DBLP:conf/iclr/0002WSLCNCZ23}, and paraphrasing consistency~\citep{portillo-wightman-etal-2023-strength} are straightforward to implement, but each can suffer from mechanistic failures such as overconfidence~\citep{rathi2025humansoverrelyoverconfidentlanguage}, trapping on the same incorrect answer~\citep{chen-etal-2023-adaptation}, or changing of the prompt’s meaning~\citep{chataigner2025saywayauditingllms}, leading to inflated confidence estimates.
-
-% \hilite{This paper}\note{which paper?} follows another line of work that adopts a more macroscopic, \hilite{behavior-level} approach, studying how LLM outputs vary under different prompting strategies and sampling techniques.
-
-An alternative approach is to attempt to elicit the confidence of LLM responses \emph{indirectly}, without probing model parameters or asking for confidence measurements directly. This approach can be likened to placing a model under judicial scrutiny. As in legal proceedings, credibility is established not by a single answer but through \textbf{cross-examination}: deposition, repeated questioning, and extensive fact checking. Accordingly, a model’s response should be examined for consistency under alternative but semantically equivalent formulations of the same question. If a model truly \emph{affirms} its answer, it should be robust to cross-examination under logically and semantically equivalent contexts.
-However, if a model’s outputs vary substantially across different framings, the credibility of the model is undermined. 
-
-
-In this paper, we study a simple behavioral principle: an answer is more credible when it remains stable across contexts that change the surrounding wording or premise but not the task-relevant meaning. In an LLM, we call this property Cross-Contextual Consistency (C3), illustrated in Figure~\ref{fig:workflow}. 
-By sampling a large number of prompt variations that preserve the original semantic content and then measuring the resulting distributional differences in model responses, we translate this behavioral principle into a quantitative metric for evaluating the credibility of a model. Rather than judging the correctness of individual answers, we evaluate the consistency of a model’s responses, which is a much simpler objective that 
-relies less on external knowledge,
-does not require access to model parameters, and
-does not rely on self-reported measures.
-Surprisingly, despite not being explicitly designed to test correctness---indeed, factuality and correctness are never explicitly evaluated by this metric---C3 proves to be a useful indicator of model correctness.
-
-This metric, which is measured at the instance level, can be aggregated into a model-level robustness profile across different benchmarks. Evaluation across 16 models and six benchmarks shows that perturbation-based probing not only provides a practical means of quantifying how much a model’s generations shift under controlled, content-neutral prompt perturbations, but also reveals a consistent association between local stability and downstream reliability: Models (and individual task instances) that exhibit smaller distributional shifts under perturbation are more likely to produce correct answers, whereas larger shifts are frequently associated with errors. \hilite{\emph{This is despite the fact that accuracy is never explicitly measured by C3.}} Building on this observation, the results show that C3 provides a complementary evaluation axis that remains informative even when conventional benchmarks become less discriminative due to saturation and contamination.
+The resulting evidence is qualified. A stable answer can be wrong, and an unstable answer can reflect distraction, formatting, or other sensitivities. Moreover, distributional stability and pairwise agreement are different quantities: their performance need not transfer across tasks. We therefore present C3 as a family of contextual diagnostics, report the estimator explicitly, and distinguish observed behavior from hypotheses about internal knowledge. Joint inspection of accuracy and stability further identifies correct-but-fragile and consistently incorrect benchmark instances without assigning a unique cause to either pattern.
+\end{revision}
 
 \begin{figure*}[t]
     \centering
     \includegraphics[width=\textwidth]{figure_1.pdf}
-    \caption{Overview of the proposed workflow. From left to right, we sample generations from the original prompt and from semantically neutral perturbed prompts, measure the resulting distributional shift, and compute C3. The right panel shows C3 for 26 models plotted by release month, revealing an increasing trend on the MMLU High School Statistics benchmark: newer models become progressively more credible.}
+    \caption{\revised{C3 workflow. Generations from the unchanged original task are compared with generations after a contextual premise is prefixed. The historical model panel summarizes the existing 26-model MMLU High School Statistics case study; changes across release dates are descriptive associations, not evidence that release date causes greater credibility.}}
     \label{fig:workflow}
 \end{figure*}
 
-% This kind of instance-level C3 that can be aggregated into a model-level robustness profile. Testing the framework across 20 models and six benchmarks show that perturbation-based probing provides a practical way to quantify how much a model’s generations shift under controlled, content-neutral prompt perturbations. 
-
-% Using this measurement, we find a consistent association between local stability and downstream reliability: models (and individual task instances) that exhibit smaller distributional shifts under perturbation are more likely to be correct, while larger shifts are often linked to errors. Building on this observation, we further show that C3 provide a complementary axis of evaluation that remains informative even when conventional benchmark scores become less discriminative due to saturation and contamination. 
-
-% In a jury trial, credibility is how a jury decides who to trust. They don't just listen to the words a witness says; they look closely at how the person acts: whether their story stays the same even when they are asked tough questions in many different ways. A court case often isn't decided by one ``right'' answer, but by whether a witness's narrative remains unchanged under the pressure of cross-examination. This process of ``credibility checking'' provides the inspiration for evaluating the latent reliability of LLMs. Just as a juror looks for stability across repeated questioning, we assess an LLM's credibility by observing how its responses hold up under varied framing. If a model’s generation shifts when a question is asked slightly differently, it lacks the foundational stability we require of a trustworthy source. We take a step in this direction by studying LLMs through perturbation-based behavioral probing. Our premise is that reliability is reflected not only in whether a model can answer correctly once, but in whether its behavior remains stable across plausible linguistic variations of the same query. We treat perturbation as a deliberate diagnostic instrument to quantify the distributional shift they induce. By injecting controlled prompt perturbations that are content-neutral, topic-aligned, and linguistically diverse, we can characterize the model’s stability and its overall credibility.
-
-% \note{yibo: might get rid of this paragraph}
-% As illustrated in Figure~\ref{fig:workflow}, the proposed framework translates this cross-examination perspective into so-called Cross-Contextual Consistency (C3), which measures response stability in three steps. For each task instance, we first sample multiple generations from the original prompt to estimate an empirical output distribution. We then generate a set of perturbed prompt variants using our \emph{controlled perturbation procedure} and sample generations under each variant. Finally, we quantify the distributional shift between the original and perturbed generations using the Maximum Mean Discrepancy \citep[MMD,][]{JMLR:v13:gretton12a}, yielding an instance-level C3 that can be aggregated into a model-level robustness profile. 
-% Testing the framework across 20 models and six benchmarks show that perturbation-based probing provides a practical way to quantify how much a model’s generations shift under controlled, content-neutral prompt perturbations. 
-
-% Using this measurement, we find a consistent association between local stability and downstream reliability: models (and individual task instances) that exhibit smaller distributional shifts under perturbation are more likely to be correct, while larger shifts are often linked to errors. Building on this observation, we further show that C3 provide a complementary axis of evaluation that remains informative even when conventional benchmark scores become less discriminative due to saturation and contamination. 
-
-Our main contributions are:
-
-
-\begin{enumerate}[]
-    \item \textbf{An underutilized behavioral property of LLMs.} We identify C3 as an underutilized behavioral property of LLMs' credibility of generations: when a model’s answer is well-supported, it should remain stable under cross-examination.
-
-    
-    \item\textbf{An operationalization of cross-contextual consistency.} We instantiate this idea through C3, a black-box evaluation protocol that compares model output distributions under original and perturbed contexts while adapting across multiple-choice, short-answer, long-form factuality, and code-generation tasks.
-    
-    \item \textbf{Empirical evidence for the evaluation utility of cross-contextual consistency.} Across six benchmarks and 16 main models, with an additional 10-model case study, we show that C3 aligns with correctness and factuality, remains robust across perturbation sources and comparison estimators, and provides a complementary diagnostic for identifying saturated, brittle, biased, and unlearned benchmark regions.
-\end{enumerate}
-
-% \section{A logical entailment view of inconsistency}
-\section{Motivation: A tale from logical entailment}
-\label{sec:logic}
-When prompted with a question, what does it intuitively mean for an LLM to answer faithfully? One natural interpretation is that the model responds in accordance with the knowledge it possesses. Fortunately, this intuition can be formalized using the language of propositional logic. 
-
-Let's write the internal parametric knowledge base of a model as \( \Gamma = \{\gamma_1, \ldots, \gamma_n\} \), consisting of \( n \) atomic binary formulae, from which \hilite{certain} statements produced by the model can be constructed via logical operators (e.g., conjunction, disjunction).  For example, we can have knowledge base with $\{\gamma_1 \text{=``Paris is in France"}, \gamma_2 \text{=``France is in Europe"} \}$ and statements like ``Paris is in an European country" ($\gamma_1 \land \gamma_2$) or ``France is a European country" ($\gamma_2$).
-% Here, we assume that an LLM possesses an parametric knowledge base \( P = \{p_1, \ldots, p_n\} \), consisting of \( n \) atomic binary formulae, from which all statements produced by the model can be constructed.
-
-
-An evaluation map $v$ assigns True or False values to atomic formulae, i.e. $v(\gamma_i)$, which induces truth values for statements built from atomic formulae.
-A valuation $v$, under which a statement $f$ evaluates to true, is said to satisfy the statement, or to be a model of the statement. Let $M(f)$ be the set of models/worlds of $f$. Intuitively, $M(f)$ is the subset of all worlds under which statement $f$ is True.  Due to the stochastic nature of language models, each evaluation is associated with a probability $P(v)$ reflecting its likelihood of being true or false. In other words, rather than modeling an LLM as having a single coherent view, we model it as a mixture of views, each associated with a probability. 
-
-Given two statements $f, g$, one can say that $f$ entails $g$ (i.e.,  $f \models g$) if $M(f) \subseteq M(g)$. That is, if $f$ entails $g$, then in every world where $f$ is True, $g$ must be True. For example, ``Paris is in an European country" entails ``France is a European country" with the knowledge base that contains ``Paris is in France" and ``France is in Europe" because $\gamma_1 \land \gamma_2 \models \gamma_2$. Interestingly, the two statements do not imply one another in isolation. The implication only holds once the internal knowledge base is taken into account.
-
-When we do not have perfect entailment, the entailment probability can be computed as:
-$
-    P(f \models g) = 1 - \sum_{v \in M(f) \text{ and } v \not\in M(g)} P(v)
-$
-This is the complement of the probability mass assigned to worlds in which \(f\) is true and \(g\) is false. In the context of LLMs, we let $f$ denote a prompt and $g$ denote an response. We interpret $f \models g$ as meaning that the prompt $f$ entails the response $g$.
-
-When evaluating LLMs, we seek to determine whether a given prompt-response pair is genuinely implied by the model’s internal world view, or, in stochastic terms, with what probability the model supports that implication. Under this framework, answering this question amounts to computing the aforementioned probability. 
-However, two challenges remain: 
-(1) How to sample different worlds $v$? 
-(2) How to estimate different probabilities $P(v)$?
-
-Our approach is motivated by considering different contexts as samples from different worlds. Each prompt corresponds to one world. Although the LLM’s output is stochastic, in practice the most probable answer typically dominates. This is because a single prompt may constrain induced behaviors. Therefore, we must perturb the prompts to induce diverse evaluation maps, while ensuring that the perturbed prompts remain within the semantic scope of \(M(f)\).
-
-
-Still, directly estimating these underlying probabilities is ill-defined. Instead, we adopt a different approach. If for every world $v$ we have $f \models g$, then the entailment probability is $1$. Conversely, if there is substantial disagreement across worlds, the entailment probability is low. We therefore measure entailment by estimating the consistency of the model’s answers across different contexts, which can be interpreted as a notion of credibility. This is how we characterize (stochastic) entailment through cross-contextual consistency.
-
-
-
-% \section{Measuring credibility via Cross-Contextual Consistency}
-
-% Building on the motivation in \cref{sec:logic}, we introduce a framework called \textbf{Cross-Contextual Consistency (C3)}, for estimating LLM credibility via semantic stability under controlled prompt perturbations.
-% This measure is defined by the distributional shift between the model’s answer distributions under two distinct prompting conditions: the original prompt and a neutral but semantically neutral perturbed prompt variant. To implement this measure, we sample a set of context perturbations, or \emph{noises} $\mathcal{E} = \{\epsilon_1, \dots, \epsilon_n\}$. 
-% Additional discussion about sources of perturbation noise and it neutrality can be found in Appendix~\ref{app:Discussion on Perturbation Noise source}. 
-% Each perturbation $\epsilon \in \mathcal{E}$ is prefixed to the original task query $x \in X$, resulting in a new query set $X'$ that effectively explores the model's generation boundary for a specific task. Some examples of the prompts prefixed with noises are: 
-% \begin{itemize}[leftmargin=*, itemsep=0pt, topsep=0pt, parsep=0pt]
-%     \item FActScore: \emph{Linda Green is a well-known American folk singer.} Tell me a bio of James Taylor.
-%     \item SimplQA: \emph{An artist might release an EP during any year of their career.} What EP did Rosalía release in 2019?
-% \end{itemize}
-
-
-% % The C3 serves as a principled black-box proxy for model credibility. It quantifies the instability of a model's output distribution when subjected to semantic variations of the input, mapping this instability to signals for both reasoning correctness and factual accuracy.
-
-% \textbf{Formalizing C3 with distributional shift}
-% We formalize the generation of an output $y$ from an LLM given an input $x$ as a stochastic process governed by the conditional probability distribution $P(Y|x)$. This perspective aligns with the fundamental mechanics of autoregressive models, where tokens are sampled sequentially based on hidden state propagation and accumulated context, resulting in a complex, high-dimensional probability density \citep{NIPS2017_3f5ee243, Holtzman2020The, geshkovski2025mathematicalperspectivetransformers}. Within this framework, our proposed C3 aims to quantify the discrepancy between the distributions $P(Y|x)$ and $P(Y|x')$, where $x'$ denotes a semantically perturbed variant of the original query. Since the exact density of $P(Y|x)$ is analytically intractable for open-weight models and inaccessible for black-box APIs, we approximate these distributions through empirical sampling. Specifically, for a given input $x$, we draw a set of $n$ samples $\mathcal{Y} = \{y_1, y_2, \dots, y_n\} \sim P(Y|x)$. The task of measuring the distance between the two generative processes is thus reduced to computing a distributional shift between the resulting sample sets $\mathcal{Y}$ and $\mathcal{Y}'$.
-
-% \textbf{Quantifying distributional shift via MMD}
-% To quantify the distance between the generative distributions $P(Y|x)$ and $P(Y|x')$, we use the Maximum Mean Discrepancy (MMD)~\citep{JMLR:v13:gretton12a}. MMD is a non-parametric kernel-based statistical method that measures the distance between two distributions.
-% % by representing them as mean embeddings in a Reproducing Kernel Hilbert Space (RKHS) $\mathcal{H}$. \hilite{Formally, we define a feature map $\phi: \mathcal{Y} \to \mathcal{H}$ that transform text sequences into a high-dimensional continuous space. For a characteristic kernel $k(y, \bar{y}) = \langle \phi(y), \phi(\bar{y}) \rangle_{\mathcal{H}}$, the squared MMD is defined in terms of expectations as:
-% % \begin{equation}
-% % \begin{aligned}
-% %     MMD^2(P, P') &= \mathbb{E}_{y \sim P}[k(y, y)] 
-% %     \\&+ \mathbb{E}_{y' \sim P'}[k(y', y')] 
-% %     \\&- 2\mathbb{E}_{y \sim P, y' \sim P'}[k(y, y')]
-% % \end{aligned}
-% % \end{equation}
-% % }
-% % \note{treat above as known, focus on practical importance/implications, push details to appendix, emphasize this is std ML stuff}
-% In practice, given finite sample sets $\mathcal{Y}$ and $\mathcal{Y}'$ of size $n$ and $m$, we compute the unbiased empirical estimate:
-% \begin{equation}
-% \scriptsize
-% \begin{aligned}
-%     \widehat{MMD}^2(\mathcal{Y}, \mathcal{Y}') &= \frac{1}{n(n-1)} \sum_{i \neq j}^n k(\phi(y_i), \phi(y_j)) + \frac{1}{m(m-1)} \sum_{i \neq j}^m k(\phi(y'_i), \phi(y'_j)) - \frac{2}{nm} \sum_{i=1}^n \sum_{j=1}^m k(\phi(y_i), \phi(y'_j))
-% \end{aligned}
-% \end{equation}
-% where $k$ is kernal function comparing two set of samples and $\phi$ is possible encoding function to handle the generations. This formulation allows the C3 to capture distributional shifts in different trials of the model's generation, effectively signaling divergence when semantic perturbations applied to the input $x$ cause the ``center of mass'' of the generative distribution to shift within the latent semantic geometry.
-
-
-\section{Operationalizing Cross-Contextual Consistency}
+\begin{revision}
+\section{Cross-Contextual Consistency}
 \label{sec:c3}
+\subsection{Behavioral hypothesis and scope}
+\label{sec:logic}
+Relevant knowledge may constrain an answer across contexts that provide no new evidence about it. This motivates the hypothesis that contextual stability is associated with answer support. It is not an equivalence: memorization, stable misconceptions, or shortcuts can also yield stable answers. Conversely, low stability need not imply missing knowledge. We test behavioral predictions of this hypothesis rather than estimate a probability of logical entailment or recover the model's internal reasoning process.
 
-Building on the motivation in \cref{sec:logic}, we operationalize \textbf{Cross-Contextual Consistency (C3)} as a behavioral probe for LLM credibility. The central intuition is simple: if a model's answer is well-supported, then its answer behavior should remain stable when the same task is placed in a different but answer-neutral context. Conversely, if the model's answer changes substantially under contextual variation that does not alter the task-relevant meaning, then the answer is more context-fragile. We therefore treat C3 as a cross-contextual comparison signal rather than as a single fixed metric: the goal is to compare model behavior under the original prompt and under controlled perturbed contexts.
+\subsection{The contextual intervention}
+For an original prompt $x$, let $\mathcal E=\{\epsilon_1,\ldots,\epsilon_L\}$ be a set of generated premises. The evaluated prompt is $x_\epsilon=[\epsilon;x]$, with $x$ copied unchanged. A premise should satisfy three requirements. \textbf{Topic alignment} means remaining in the task's broad domain or capability. \textbf{Answer neutrality} means neither revealing, supporting, contradicting, nor changing the requested answer or judgment. \textbf{Contextual diversity} means adding non-duplicate context rather than rewriting the question. Neutrality is a task-semantic requirement; it does not require invariant model representations, which would prevent the very behavior we aim to measure.
 
-\textbf{Controlled contextual perturbations.}
-For each original task query $x \in X$, we sample a set of contextual perturbations
-$\mathcal{E} = \{\epsilon_1, \dots, \epsilon_n\}$. Each perturbation $\epsilon \in \mathcal{E}$ is prefixed to the original query, producing a perturbed query $x' = [\epsilon; x]$. These perturbations are designed to change the surrounding context while preserving the task itself. In particular, we require perturbations to satisfy three properties: topic alignment, content neutrality, and non-trivial contextual variation. Topic alignment means that the perturbation remains within the broad domain or capability being tested. Content neutrality means that the perturbation does not reveal, support, contradict, or otherwise change the correct answer. Non-triviality means that the perturbation introduces meaningful contextual variation rather than merely restating the original question. We verify these three requirements separately in the appendix. Content neutrality is evaluated in Appendix~\ref{app:semantic neutrality}, where we examine whether the added context avoids introducing answer-relevant information or systematically shifting model performance. Topic alignment is examined in Appendix~\ref{app:Topic Alignment}, where we assess whether perturbations remain within the same broad domain or capability as the original query. Non-trivial contextual variation is verified in Appendix~\ref{app:diversity of noise}, where we check that accepted perturbations introduce diverse contextual variation rather than near-duplicate restatements.
+GPT-4.1 generates short premises using the instructions in Appendix~\ref{app:prompt for sampling}. An MPNet embedding filter removes near-duplicate premises at cosine similarity threshold $0.8124$. Paraphrases of auxiliary premises were used only to choose this redundancy threshold (Appendix~\ref{app:diversity of noise}); evaluated questions are not paraphrased by C3. Prompt constraints and filtering do not guarantee neutrality, so we separately assess the generated material (Section~\ref{sec:neutrality}).
 
-Some examples of perturbed prompts are:
-\begin{itemize}[leftmargin=*, itemsep=0pt, topsep=0pt, parsep=0pt]
-    \item SVAMP: \emph{Many tourists visited the ancient castle during the weekend.} Rachel learned that 317 visitors came to Buckingham Palace that day. If there were 295 visitors the previous day, how many more visitors visited Buckingham Palace that day than on the previous day?
-    \item SimpleQA: \emph{An artist might release an EP during any year of their career.} What EP did Rosalía release in 2019?
-\end{itemize}
+\subsection{Sampling and scoring}
+We sample $\mathcal Y=\{y_i\}_{i=1}^{n}$ from $P(Y\mid x)$ and $\mathcal Z=\{z_j\}_{j=1}^{m}$ under the contextual conditions, approximating
+\begin{equation}
+ P^{\mathcal E}(Y\mid x)=\frac{1}{L}\sum_{\epsilon\in\mathcal E}P(Y\mid[\epsilon;x]).
+\end{equation}
+This compares the original distribution with a mixture over premises. Opposing premise-specific shifts can cancel in the mixture; the pooled score is not a guarantee of invariance to every premise.
 
-\textbf{Definition of C3.}
-We formalize model generation as a stochastic process. Given an input $x$, an LLM induces a conditional distribution $P(Y \mid x)$ over possible outputs. This view follows the standard autoregressive perspective, where tokens are sampled sequentially based on the accumulated context and hidden state dynamics~\citep{NIPS2017_3f5ee243, Holtzman2020The, geshkovski2025mathematicalperspectivetransformers}. For an original query $x$, we sample a set of outputs
-$\mathcal{Y} = \{y_1, y_2, \dots, y_n\} \sim P(Y \mid x)$.
-For each contextual perturbation $\epsilon \in \mathcal{E}$, we construct a perturbed query
-$x_\epsilon = [\epsilon; x]$. The perturbation set $\mathcal{E}$ induces a perturbed output distribution, $P^{\mathcal{E}}(Y \mid x) = \frac{1}{|\mathcal{E}|}\sum_{\epsilon \in \mathcal{E}} P(Y \mid x_\epsilon)$ from which we sample perturbed outputs $\mathcal{Y}^{\mathcal{E}} = \{y'_1, y'_2, \dots, y'_m\} \sim P^{\mathcal{E}}(Y \mid x)$.
+Given an answer-similarity kernel $k$, a distributional implementation uses the unbiased squared Maximum Mean Discrepancy (MMD) estimator~\citep{JMLR:v13:gretton12a}:
+\begin{equation}
+\begin{aligned}
+ \widehat D_U={}&\frac{\sum_{i\ne i'}k(y_i,y_{i'})}{n(n-1)}\\
+ &+\frac{\sum_{j\ne j'}k(z_j,z_{j'})}{m(m-1)}
+ -\frac{2\sum_{i,j}k(y_i,z_j)}{nm}.
+\end{aligned}
+\label{eq:mmd_main}
+\end{equation}
+For the indicator kernel used in the new categorical analyses, the reported score is
+\begin{equation}
+ C_{\mathrm{MMD}}=1-\operatorname{clip}(\widehat D_U/2,0,1).
+\label{eq:c3_mmd}
+\end{equation}
+Clipping handles negative finite-sample unbiased estimates. The score is a stability statistic, not a fitted probability of correctness.
 
-Cross-Contextual Consistency (C3) measures how stable the model's answer behavior remains between the original and perturbed conditions. Formally, we define C3 as a normalized inverse distance between the original and perturbed output distributions: $\mathrm{C3}(x;\mathcal{E}) = 1 - \widetilde{D}\left(P(Y \mid x), P^{\mathcal{E}}(Y \mid x)\right)$,
-where $\widetilde{D}(\cdot,\cdot)$ is a task-adaptive distance or disagreement function normalized to $[0,1]$. A higher C3 score indicates that the model's output distribution changes less under topic-aligned, content-neutral contextual variation, while a lower C3 score indicates greater context-fragility. This definition makes C3 a general cross-contextual comparison framework rather than a metric tied to a single distance.
+We also report the cross-comparison agreement score
+\begin{equation}
+ C_{\mathrm{cross}}=\frac{1}{nm}\sum_{i,j}k(y_i,z_j).
+\label{eq:c3_cross}
+\end{equation}
+For categorical answers with frequencies $p$ and $q$, indicator-kernel population MMD is $\sum_c(p_c-q_c)^2$, whereas $C_{\mathrm{cross}}=\sum_c p_cq_c$. Cross-comparison depends on concentration as well as agreement between conditions. For example, identical uniform binary distributions have zero population MMD but cross-comparison $1/2$. Total-variation stability, $C_{\mathrm{TV}}=1-\frac12\sum_c|p_c-q_c|$, is a third, distinct statistic. These distinctions matter in the opinion experiment.
 
-\textbf{Distance metric: MMD.}
-In our main implementation, we instantiate $\widetilde{D}$ using Maximum Mean Discrepancy (MMD)~\citep{JMLR:v13:gretton12a}. MMD provides a flexible non-parametric estimator for comparing empirical answer distributions, making it suitable for both fixed-format and open-ended generations. Given sampled outputs from the original condition $\mathcal{Y}$ and the perturbed condition $\mathcal{Y}^{\mathcal{E}}$, we compute an empirical MMD distance using task-adaptive feature maps and kernel choices. We then normalize the resulting distance into a consistency score in $[0,1]$, where larger values indicate smaller cross-contextual shift. Details on the empirical MMD estimator, task-adaptive feature maps, kernel choices, and normalization are provided in Appendix~\ref{app:Operationalization through MMD}.
+\paragraph{Answer representation and cost.}
+Categorical outputs use normalized extracted answers and an equality kernel. Open-ended comparisons may use embeddings or an equivalence judge; these choices require their own validation and do not automatically meet the assumptions of a characteristic kernel. MMD uses within-condition and cross-condition comparisons, while cross-comparison uses only the latter. Direct pairwise implementations cost $O(n^2+m^2+nm)$ and $O(nm)$, respectively; both are quadratic when $m=n$. Categorical frequency counts avoid explicit pair enumeration. Runtime claims must also account for generation, extraction, and judging. Appendix~\ref{app:Operationalization through MMD} distinguishes the implementations found in the experiment records.
+\end{revision}
 
-Importantly, MMD provides one instantiation of C3, not the definition of C3 itself. C3 is defined by the comparison between model behavior under original and perturbed contexts. In Appendix~\ref{app:Ablation Study on MMD}, we replace MMD with a simpler cross-comparison distance and show that the same cross-contextual signal is largely preserved, supporting the view that C3 is driven by the original-versus-perturbed comparison rather than by a particular choice of distance.
+\begin{revision}
+\section{Experimental setup}
+\paragraph{Original evaluation.}
+The original study evaluates SVAMP, MMLU High School Statistics, CommonsenseQA, SimpleQA Verified, FActScore, and HumanEval~\citep{patel-etal-2021-nlp,hendryckstest2021,talmor-etal-2019-commonsenseqa,haas2025simpleqaverifiedreliablefactuality,min-etal-2023-factscore,DBLP:journals/corr/abs-2107-03374}. It reports 16 main models, 30 generations per original and perturbed condition, and 10 additional models in the MMLU case study. Baselines are self-reported confidence, self-consistency, and paraphrasing consistency. FActScore supplies an external factual-support evaluation for long-form text, rather than a comparable reference-free confidence row in Table~\ref{tab:main_results}. Model and benchmark details appear in Appendices~\ref{app:Models} and~\ref{app:benchmark_details_prompts}.
 
+\paragraph{Additional studies.}
+The completed FreshQA run uses 50 questions, four models, and 20 samples in each of four conditions (Section~\ref{sec:cutoff}). TopicMisinfo uses 50 sampled claims and 14 models with 20 responses per condition (Section~\ref{sec:opinion}). These smaller studies have separate protocols and are not additional 16-model benchmark blocks. The human neutrality audit concerns 100 MMLU perturbations judged by three annotators.
 
+\paragraph{Quality and calibration.}
+We report ECE, AUROC, and precision--recall measures for positive and negative labels (AUPRC-P/N). In the original evaluation, ECE compares scores with mean generation performance; ranking labels threshold that performance at $0.5$. TopicMisinfo instead uses a binary label for proximity to an annotator reference. Scores are evaluated on their stated scales without a fitted calibration map. Lower ECE in these settings does not by itself establish a universally calibrated correctness probability. Appendix~\ref{app:Evaluation Metrics} specifies the targets.
 
-\section{Experiments}
-In this section, we describe our experimental setup, including data, methods, LLM models, and benchmarks.
-
-\textbf{Data.}
-We evaluate C3 on six widely used benchmarks spanning arithmetic reasoning, multiple-choice reasoning, commonsense inference, short-form factual QA, long-form factuality, and code generation. Specifically, we use SVAMP~\citep{patel-etal-2021-nlp}, MMLU High School Statistics~\citep{hendryckstest2021,hendrycks2021ethics}, CommonsenseQA~\citep{talmor-etal-2019-commonsenseqa}, SimpleQA Verified~\citep{haas2025simpleqaverifiedreliablefactuality}, FActScore~\citep{min-etal-2023-factscore}, and HumanEval~\citep{DBLP:journals/corr/abs-2107-03374}. Together, these benchmarks cover both fixed-format and open-ended generations, allowing us to evaluate C3 across diverse task formats and answer types. Detailed benchmark descriptions and prompts are provided in Appendix~\ref{app:benchmark_details_prompts}.
-
-\textbf{Baselines.}
-Since C3 is intended to serve as a proxy for the credibility of model generations, we compare it with related notions of confidence, consistency, and factuality. We include both vanilla black-box confidence estimators and a non-vanilla factuality checking tool. The vanilla baselines include \textbf{self-reported confidence}~\citep{lin2022teaching}, where the model outputs an explicit confidence score together with its answer; \textbf{self-consistency}~\citep{DBLP:conf/iclr/0002WSLCNCZ23}, which estimates confidence from agreement among repeated stochastic generations under the same prompt; and \textbf{paraphrasing consistency}~\citep{portillo-wightman-etal-2023-strength}, which measures whether answers remain stable under meaning-preserving prompt paraphrases. As a non-vanilla baseline, we compare against FActScore ~\citep{min-etal-2023-factscore}, which evaluates factual support for long-form generations using external evidence. For sampling-based baselines, agreement is computed with a generalized consistency score, using exact-match indicators for fixed-format tasks and semantic similarity for open-ended generations. Full implementation details are provided in Appendix~\ref{app:baseline_details}.
-
-\textbf{Models.}
-We evaluate C3 on 16 widely used LLMs spanning multiple families and scales. We also conduct case studies on 10 additional models; however, due to their characteristics, such as heavier reasoning processes or deprecated designs, they are often costly in time and computational resources. We therefore restrict these case studies to the MMLU High School Statistics benchmark. The full list of models is provided in Appendix~\ref{app:Models}.
-
-\textbf{Evaluation metrics.}
-We evaluate C3 and all baseline scores after normalizing each score to the range $[0,1]$. To measure calibration, we report the \textbf{Expected Calibration Error (ECE)}, where lower values indicate better calibration. For ranking-based evaluation, we report \textbf{AUROC}, as well as the area under the precision--recall curve for detecting correct outputs (\textbf{AUPRC-P}) and detecting incorrect outputs (\textbf{AUPRC-N}), with the latter computed using $1-s_i$. Details and implementation of these metrics are provided in Appendix~\ref{app:Evaluation Metrics}.
-
-
+\paragraph{Answer comparison.}
+The original study describes Qwen3-8B at temperature zero for large-scale equivalence judgments~\citep{qwen3technicalreport}, using vLLM on two H200 GPUs~\citep{kwon2023efficient}. An equivalence decision concerns substantive answer identity rather than correctness, but can still introduce errors. FreshQA uses cached core-answer extraction followed by target-blind normalization; TopicMisinfo uses deterministic rating extraction. The exact comparison path must be distinguished by task. Appendix~\ref{app:revision_audit} records remaining provenance checks.
+\end{revision}
 
 \begin{table*}[t]
 \centering
@@ -449,115 +347,127 @@ C3 (Ours)
 \bottomrule
 \end{tabular*}
 
-\caption{Comparison of C3 with baselines across six benchmarks average over 16 models we tested. Shaded cells denote the best performance for each metric among the four methods. CommonsenseQA evaluates commonsense world knowledge; SVAMP evaluates mathematical reasoning; MMLU High School Statistics evaluates statistical knowledge; FactScore and SimpleQA evaluate factuality in long-form and short-form generation, respectively; and HumanEval evaluates code generation. Lower is better for ECE, while higher is better for AUROC, AUPRC-P, and AUPRC-N. The noise for perturbation in the table is sampled by GPT-4.1, and we also shown that C3 does not rely on advanced model and the results can be still reproducible by smaller models with very few costs as we shown in Appendix\ref{app:Ablation Study on Source of Noises}.}
+\caption{\revised{Original six-benchmark results, reported as averages over 16 models. Numerical entries are retained from the source manuscript. Shading indicates the best reported value within each benchmark and metric. ECE is lower-is-better; the ranking metrics are higher-is-better. The added FreshQA and TopicMisinfo studies are reported separately with explicit estimator names and sample counts. Appendix~\ref{app:revision_audit} identifies the remaining provenance checks for the original score implementations.}}
 \label{tab:main_results}
 \end{table*}
 
-
-
-
-
-\textbf{C3 elicitation.}
-For both perturbed and unperturbed sampling, we collected 30 trials per instance across 16 standard models to assess the alignment of C3 against other baselines. The number 30 is supported by an empirical study shown in Appendix~\ref{app:number of trials}. In this study we use GPT-4.1 for noise sampling, however, an ablation study in Appendix~\ref{app:Ablation Study on Source of Noises} shows that perturbations from much smaller models are nearly as effective as those from larger ones, but with much lower computational overhead. The noise was prefixed to each prompt, separated by a single space. To determine answer equivalence, we use an LLM through the prompt detailed in Appendix~\ref{app:prompt for LLMs as Judges}. Given the high volume of evaluations required (tens of millions given the scale of our experiments), we performed offline inference using a Qwen3-8B~\citep{qwen3technicalreport} model temperature set to 0, supported by the VLLM framework~\citep{kwon2023efficient} on two NVIDIA H200 GPUs.
-
+\begin{revision}
 \section{Results}
-We find that C3 provides substantially better signals than the baseline methods, and aligns especially well on challenging benchmarks such as SimpleQA, where other approaches often produce inflated assessments.
+\subsection{Predicting task-specific answer quality}
+Table~\ref{tab:main_results} retains the original aggregate comparisons. C3 has higher reported AUROC than the three baselines across all six benchmarks, including $0.917$ versus $0.861$ for self-consistency on SVAMP and $0.823$ versus $0.792$ on SimpleQA. Gains are not uniform across metrics: self-reported confidence has higher AUPRC-P on MMLU, and self-consistency has higher AUPRC-N on FActScore. These comparisons support predictive utility in the tested settings, without showing that C3 recovers the logical coherence or internal grounding of individual answers.
+
+On FActScore, C3's reported ECE and AUROC are $0.160$ and $0.873$. FActScore evaluates atomic claims against external evidence, whereas C3 probes response behavior. Their association supports a retrieval-free diagnostic at scoring time, not replacement of factual verification. Auxiliary premise generation and answer comparison still incur costs. Extended scaling and factuality plots are retained in Appendix~\ref{app:extended_results}.
+\end{revision}
+
+\begin{revision}
+\subsection{Validation of contextual premises}
+\label{sec:neutrality}
+The existing MMLU analysis compares the number of correct responses among 30 original and 30 perturbed generations for each model--question pair. Its approximately zero-centered differences provide a check for aggregate directional effects, not instance-level neutrality. A separate domain-classification check assigns approximately $96\%$ of premises to the intended benchmark domain; it assesses topic alignment rather than answer relevance.
+
+In an additional human study, all three annotators independently assessed each of 100 MMLU perturbations alongside its question and correct answer. They judged whether the added context helped, was neutral, or hurt the answer. Ninety-four perturbations were unanimously judged neutral. This is evidence about the inspected sample under a strict agreement criterion, not a guarantee for every premise, task, or model. The remaining six items cannot be characterized without their individual judgments. Appendix~\ref{app:human_neutrality} gives the supplied protocol and flags the records needed to complete this audit.
+\end{revision}
+
+\begin{revision}
+\subsection{Knowledge cutoff and contextual stability}
+\label{sec:cutoff}
+We analyze a matched FreshQA subset~\citep{vu-etal-2024-freshllms} containing 25 facts established by 2022 and 25 facts first established in 2025. Four models with documented cutoffs no later than August 2024 are evaluated: GPT-4.1, GPT-4.1 mini, Gemma 3 27B, and Llama 3.1 70B. The completed run samples 20 responses in each of four arms: two independent original-prompt replicates, surface-format variants, and contextual premises. The reference date is fixed across arms. Each control is compared with the same original replicate using the same estimator; original-replicate MMD is a sampling control, not within-prompt answer concentration.
+\end{revision}
 
 
-\subsection{C3 is calibrated with truthfulness}
+\begin{table}[t]
+\centering\small\revisioncolor
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrr}
+\toprule
+Diagnostic & Pre-cutoff & Post-cutoff\\
+\midrule
+Original accuracy & .659 & .126\\
+\midrule
+MMD: original replicates & .999 & .994\\
+MMD: format & .984 & .980\\
+MMD: context & .976 & .946\\
+\midrule
+Cross: original replicates & .812 & .579\\
+Cross: format & .786 & .537\\
+Cross: context & .771 & .469\\
+\bottomrule
+\end{tabular}
+\caption{FreshQA means across four models and 25 questions per cutoff group. MMD and cross-comparison are reported on separate scales. Matched-pair bootstrap intervals and model-level results appear in Appendix~\ref{app:freshqa}.}
+\label{tab:freshqa}
+\end{table}
+\begin{revision}
+Accuracy is lower for post-cutoff facts (Table~\ref{tab:freshqa}), supporting the intended difference in plausible knowledge availability. MMD contextual stability decreases by $0.030$ (matched-pair cluster-bootstrap 95\% CI $[0.006,0.054]$), while the format-only decrease is $0.004$ ($[-0.011,0.019]$). Contextual distance exceeds format distance by $0.021$ ($[0.011,0.032]$), averaged over both groups. However, the post-minus-pre increase in this excess distance is $0.026$, with a two-sided interval of $[-0.002,0.052]$. Thus, the specific cutoff-by-condition interaction is less certain than the contextual contrast overall.
+
+Cross-comparison shows a larger decline, from $0.771$ to $0.469$, but original-replicate and format agreement also decline substantially. This quantity includes answer concentration, so its full decrease cannot be attributed to contextual distributional shift. Its excess context-versus-format distance increases by $0.052$ ($[0.009,0.094]$). Together, the controls support a behavioral association with the cutoff grouping while leaving temporal content differences, stable errors, and the internal basis of responses unresolved.
+\end{revision}
+
+\begin{revision}
+\subsection{Alignment with human opinion ratings}
+\label{sec:opinion}
+TopicMisinfo~\citep{neumann2026opinions} contains human judgments of the potential harm of claims to demographic groups. We evaluate a topic-stratified sample of 50 claims with 14 models, asking for a six-point rating from the perspective of a statistically average person. The human reference equally weights the mean ratings of male and female annotators. A model--claim pair is labeled aligned when the original-prompt mean rating is within one point of that reference. After requiring complete response slots and at least five extracted ratings per condition, 663 pairs remain, with 34--50 claims per model. This measures alignment with the dataset's annotator reference, not factual truth or population representativeness.
+\end{revision}
 
 
+\begin{table*}[t]
+\centering\small\revisioncolor
+\begin{tabular}{lrrrr}
+\toprule
+Score & ECE $\downarrow$ & AUROC $\uparrow$ & AUPRC-P $\uparrow$ & AUPRC-N $\uparrow$\\
+\midrule
+\input{revision/tables/topicmisinfo_rows.tex}
+\bottomrule
+\end{tabular}
+\caption{TopicMisinfo macro averages over 14 models, recomputed from cached responses on the same retained instances within each model. All methods use 20 original response slots; contextual scores also use 20 perturbed slots. Same-prompt concentration is one minus categorical entropy normalized by $\log 6$. These are descriptive comparisons without a fitted score-calibration map.}
+\label{tab:topicmisinfo}
+\end{table*}
+\begin{revision}
+Cross-comparison improves ECE from $0.213$ to $0.164$ relative to plurality-based self-consistency and raises AUROC from $0.700$ to $0.712$ (Table~\ref{tab:topicmisinfo}). The interpretation is estimator-dependent: MMD and total-variation stability perform worse, while same-prompt pairwise agreement and entropy-based concentration have slightly higher AUROC than cross-comparison. On the 25 claims retained for every model, the ECE advantage remains, but the same-prompt ranking controls again remain competitive (Appendix~\ref{app:topicmisinfo}). Accordingly, this experiment supports the usefulness of contextual agreement on this task, not uniform superiority of distributional stability or a general endorsement of simulated opinions.
+\end{revision}
 
+\begin{revision}
+\subsection{Implementation sensitivity and benchmark diagnosis}
+The original source ablation includes GPT-4.1 premises, Qwen3-8B premises, and web snippets (Appendix~\ref{app:Ablation Study on Source of Noises}). The reported results suggest that useful signals can persist across sources, but changing the source also changes relevance, diversity, and possible answer leakage. This comparison does not isolate the contribution of each perturbation constraint. Likewise, the SimpleQA comparison trades calibration and ranking performance between score implementations (Appendix~\ref{app:Ablation Study on MMD}); it does not establish estimator interchangeability, as the opinion results demonstrate.
 
-\paragraph{Correctness.} The results in Table~\ref{tab:main_results} demonstrate that C3 consistently outperforms existing baselines in aligning model ``credibility'' with truthfulness.  In math tasks like SVAMP, C3 achieves an AUROC of 0.917, a noticeable jump over Self-Consistency, with AUROC of 0.861. This suggests that measuring the credibility of LLMs with perturbations is more effective for capturing the logical coherence of a reasoning chain than simple sampling strategies using identical prompts.
-
-\textbf{Factuality.} Furthermore, the consistent gains on FActScore, CommonsenseQA, and SimpleQA suggest that C3 is effective for detecting factuality-related errors. In these settings, traditional consistency metrics can be poorly calibrated because models may remain highly consistent even when they are confidently relying on incorrect parametric memories or strong priors. By measuring the distributional shift in generations induced by content-neutral noise, C3 increases contrast between well-known facts, small shift, and poorly known facts, large shift, yielding a more informative signal of the model’s knowledge state.
-\begin{figure}[t]
-
-    \centering
-    \includegraphics[width=\linewidth]{scaling_laws.png}
-    \caption{Scaling trends of Cross-Contextual Consistency (C3) calibration across benchmarks. Colors distinguish different benchmarks, while line styles represent metric types: solid lines denote AUROC (higher is better) and dashed lines denote ECE (lower is better). The results show that as model scale increases, the C3 becomes significantly better calibrated to correctness, evidenced by rising AUROC and declining ECE.}
-    \label{fig:auroc_scaling_small_large_text}
-
-\end{figure}
-
-
-\textbf{Long form generation.}
-Across the six benchmarks tested, HumanEval and FActScore are considered as ``long-form generation'' because they do not assume a pre-defined output format (such as multiple choice or keywords). C3 achieves nearly the best scores across four metrics in these two forms of generation: 0.110 ECE and 0.847 AUROC on HumanEval, and 0.160 ECE and 0.873 AUROC on FActScore. This is a scenario where many existing works fail. Our method scales cleanly to long-form generation, keeping nearly as simple as fixed-format tasks, which even allows us to evaluate code generation. While recent efforts like \citet{sharma2025assessingcorrectnessllmbasedcode} assess uncertainty in code via symbolic execution, our method achieves superior calibration without requiring external execution environments.
-
-\textbf{Why they fail?}
-Self-reported measures exhibit miscalibration: While they occasionally achieve seemingly reasonable ECE (e.g., 0.191 in CommonsenseQA), their discriminative power, measured by AUROC and AUPRC, remains near-random. This confirms that LLMs struggle to introspectively verbalize uncertainty, often overconfidently yielding near-100\% score for wrong answers~\citep{mielke-etal-2022-reducing, rathi2025humansoverrelyoverconfidentlanguage}. We also find that paraphrasing suffers from fundamental mechanistic flaws; since the paraphrasing is often performed by an LLM assistant, it can introduce semantic drift. For instance, high word overlap can mask cases where swapping arguments changes the underlying meaning~\citep{zhang-etal-2019-paws}, or the assistant may unintentionally alter the core intent of the prompt~\citep{chataigner2025saywayauditingllms}. Methods like self-consistency paraphrasing do not fail entirely aligning with truthfulness but are often trapped in the ``confidently wrong'' loop of LLM generation when the model sticks with an incorrect answer. As reflected in SimpleQA, which is a hard benchmark for many LLMs, self-consistency fails and is mis-calibrated with actual correctness on ECE, and paraphrasing makes results even worse. Measuring the distributional shift with C3, we successfully nudge the model to sample different answers when the knowledge is not grounded in LLMs' knowledge base, providing a much better signal in ECE and AUROC (0.166 and 0.823, respectively) in SimpleQA.
-
-
-
-
-C3 becomes more informative as model capability increases. As shown in Figure~\ref{fig:auroc_scaling_small_large_text}, larger models within the Llama and Mistral families generally show stronger alignment between C3 and downstream correctness. This suggests that cross-contextual consistency is most useful once a model has enough capability for stable answer behavior to emerge; at that point, residual instability more clearly marks fragile answers rather than broad capability failure. However, scale does not eliminate cross-contextual fragility: even the strongest models remain imperfectly stable under answer-neutral contextual variation.
-
-\subsection{A closer inspection on facutality}
-CommonsenseQA, FActScore, and SimpleQA all test a model's world knowledge and factuality. C3 shows a close alignment with the quality of generation across all three. While FActScore probes externally, scoring by decomposing long-form generation into atomic facts and verifying them against external sources, C3 probes internally. It uses variations of noise to perturb the LLM to see if it ``insists'' on an answer; the resulting distributional shift provides a significant signal regarding the quality of generation. As shown in Figure~\ref{fig:factuality}, when aggregating instance-level C3 and correctness, we observe a 0.624 Spearman rank correlation on FActScore and an 0.831 AUROC. We also include a comparison with SimpleQA, a benchmark where most models fail, making it a strong indicator for detecting overconfident metrics; C3 shows a 0.642 Spearman correlation and an 0.821 AUROC. Even without probing external information, C3 successfully aligns with FActScore. This suggests that the model’s internal state contains a latent representation of its own knowledge boundaries: when a model ``knows'' a fact, its output distribution is resilient to input noise, whereas hallucinated facts reside in low-probability regions that collapse or shift significantly under even minor perturbations.
-
-
-\begin{figure}[t]
-
-    \centering
-    \includegraphics[width=\linewidth]{alignment_Facuality.png}
-    \caption{A detailed comparison of C3 alignment with factuality on FActScore and SimpleQA, showing Spearman rank correlation (left) and AUROC (right). C3 exhibits moderate to strong rank correlation with generation factuality. Minor AUROC differences from Table 1 are due to different aggregation strategies.}
-    \label{fig:factuality}
-
-\end{figure}
-
-\subsection{C3 for benchmark diagnosis}
-By jointly inspecting instance-level C3 and instance-level benchmark performance, we can show cross-model typical behavior for each benchmark instance after averaging across the same 16 models. We find that C3 captures complementary information about model behavior beyond aggregate performance alone, as shown in Figure~\ref{fig:Effect_analysis}.
-
-\textbf{Why do we need C3 as an additional axis?}
-Relying exclusively on performance scores often mask the underlying mechanism of a model's knowledge. A key phenomenon in current LLM evaluation is that benchmarks may suffer from data contamination or overfitting, where models memorize specific prompt-answer pairs without acquiring the underlying reasoning. C3 provide additional information: ``Brittle'' (Yellow) region where models achieve high accuracy but fail to maintain consistency under perturbation. While high performance typically suggests capability, the low C3 in this region supports the alternative hypothesis: Success on these instances is driven by surface-level pattern matching rather than robust semantic understanding. This divergence serves as a proxy for detecting potential benchmark leakage to training processes of current LLMs.
-
-C3 also helps differentiating mastered from systematic bias. The C3 axis further clarifies the status of the benchmark by distinguishing between ``solved'' and ``biased'' generation. Instances in the ``Mastered'' (Green) region represent tasks where models have converged on a stable solution. A high density of instances in this region supports the hypothesis of benchmark saturation, indicating that these specific questions no longer possess the discriminative power to distinguish between the capabilities of different models. Conversely, the ``Biased'' region highlights instances where models are not merely guessing, but are consistently trapped on incorrect answers. This supports the hypothesis that these benchmark instances trigger strong, incorrect priors or common misconceptions shared across models that possibly arise from model training processes. 
-
-\textbf{Benchmark by Benchmark Comparison.}
-Figure~\ref{fig:Effect_analysis} visualizes instance-level C3 against performance, revealing distinct patterns that characterize the status of each benchmark. CommonsenseQA and HumanEval both exhibit the signature of saturation, where a significant proportion of instances in the ``Mastered'' region suggests these tasks are well solved by modern models. However, in contrast to CommonsenseQA, HumanEval displays a heavy ``tail'' extending into the ``Brittle'' quadrant; this pattern implies that its high performance may be partially inflated by overfitting, where models succeed via surface pattern matching but fail under perturbation, lacking the true reasoning process of coding~\citep{riddell-etal-2024-quantifying}. SVAMP and FActScore show a balanced proportion of unlearned and mastered instances, while MMLU High School Stats shows a high number of mastered but also a significant cluster of biased instances; this suggests that while basics are understood, specific statistical concepts trigger consistent, systematic misconceptions. Finally, SimpleQA represents the true ``hard'' benchmark, dominated by the ``Unlearned'' region. The scarcity of mastered instances and the prevalence of stable poor performance indicate that this benchmark is not saturated, but rather captures specific knowledge gaps that remain out of reach for the current generation of models.
+Jointly plotting performance and C3 provides a descriptive benchmark diagnostic (Figure~\ref{fig:Effect_analysis}). Correct-but-fragile instances differ from consistently correct ones, and stable incorrect answers differ from unstable errors. These regions identify behaviors worth investigating. They do not independently demonstrate contamination, overfitting, misconceptions, or genuine understanding. Median-based boundaries are relative to the evaluated models and benchmarks, rather than universal thresholds for credibility.
+\end{revision}
 
 \begin{figure}[t]
 
     \centering
     \includegraphics[width=\linewidth]{Bench_diagnosis.png}
-    \caption{ For each benchmark instance, we compute the mean performance and mean C3 across the 16 models, then partition instances into four regions using the median performance and median C3 computed over instances across the six benchmarks. Green (“mastered”) indicates high performance with contextually consistent answers; yellow (“brittle”) indicates high performance but sensitive to perturbations; red (“biased”) indicates low performance yet perturbation-invariant (consistently wrong) answers; gray indicates low performance with inconsistency, suggesting knowledge that is not reliably learned.}
+    \caption{\revised{Joint performance and contextual-stability diagnostic from the original evaluation, averaged over 16 models. The existing figure uses median splits across six benchmarks. Its labels ``mastered, ``brittle, ``biased, and ``unlearned denote descriptive quadrants only: high/high, high/low, low/high, and low/low performance/stability. They do not establish a learning mechanism, contamination, or demographic bias.}}
     \label{fig:Effect_analysis}
 
 \end{figure}
-\section{Related work}\label{Related work}
-A variety of methods to estimate model confidence have been proposed in the literature.
-\textbf{White-box.} Methods rely on logits, hidden states, or parameters, which are infeasible for closed models; moreover, OpenAI reported degraded calibration after post-training, underscoring instability in probability-based confidence \citep{openai2024gpt4technicalreport,xie-etal-2024-calibrating,pmlr-v235-shen24c}. \
-\textbf{Self-verbalized (black-box).} Such confidence can be miscalibrated and drift with prompting and post-training, and often shows over-confidence, even though some elicitation schemes help in specific settings \citep{lin2022teaching,xiong2024can,kumar-etal-2024-confidence,zhang-etal-2024-calibrating,heo2025do,openai2024gpt4technicalreport}. \
-\textbf{Agreement-based (black-box).} Operating without input perturbation, plurality voting can conflate repetition bias with genuine certainty and underuse informative minority signals \citep{huang-etal-2024-mirror,DBLP:conf/iclr/0002WSLCNCZ23}. \
-\textbf{Semantic paraphrase (black-box).} Paraphrase-based uncertainty presumes meaning preservation, yet small wording changes often shift semantics and behavior; entropy over paraphrases can therefore reflect semantic drift rather than true confidence \citep{zhang-etal-2019-paws,wahle-etal-2024-paraphrase,melamed-etal-2024-prompts,mizrahi-etal-2024-state}. Meanwhile paraphrasing with LLMs leads to biased collection of model performance, \citep{lunardi2025robustnessreliabilitybenchmarkbasedevaluation} shows that the  absolute accuracy
-scores drop significantly when when paraphrased the quesiton. 
-\textbf{Answer-calibration for long-form.} Treating confidence as probability of the correct answer’’ is ill-posed for multi-sentence, open-ended generations; automatic checks correlate unevenly with human judgment and preferences \citep{xu-etal-2023-critical,fabbri-etal-2021-summeval,chen-etal-2024-humans}.  \
-\textbf{Other families (conformal, refusal).} These typically require labels, specialized scoring access, or finetuning—constraints that hinder post-hoc use in closed APIs \citep{quach2024conformal,pmlr-v235-mohri24a,zhang-etal-2024-r}.
 
-\paragraph{Our approach}
-We measure credibility via the distributional shift in generation induced by semantically equivalent, meaning-preserving prompt perturbations, using this perturbation gap as a reference-free proxy for confidence \citep{kuhn2023semantic,mizrahi-etal-2024-state}. This lens differs from existing prompt-sensitivity and robustness notions in several important ways. Some prior work quantifies sensitivity in probability space by tracking changes in log-likelihoods or likelihood ratios across prompt variants, which typically requires access to internal scoring signals and reflects probability drift rather than semantic drift of the generated content \citep{chatterjee-etal-2024-posix}. Others study robustness through format-induced variability by measuring sensitivity to spurious formatting features in prompt design, diagnosing evaluation volatility but not yielding an instance-level credibility signal for open-ended generations \citep{sclar2024quantifyinglanguagemodelssensitivity}. Related measures are also often defined for classification by analyzing instability of predicted label distributions under rephrasing, which does not transfer cleanly to free-form text where outputs must be compared semantically rather than as discrete labels \citep{errica-etal-2025-wrong}. Another line evaluates the reliability of knowledge probing methods by testing whether accept/reject decisions remain consistent under perturbations, emphasizing probe stability rather than the stability of the generated answer itself \citep{zhao-etal-2025-know}. In contrast, C3 directly measures invariance to meaning-preserving perturbations, is black-box and format-adaptive, and provides a comparable credibility diagnostic across heterogeneous tasks and open-ended generation formats.
+\begin{revision}
+\section{Related work}
+\label{Related work}
+\paragraph{Same-prompt uncertainty.}
+Self-consistency uses repeated generations from one prompt~\citep{DBLP:conf/iclr/0002WSLCNCZ23}; semantic uncertainty groups responses by meaning before estimating uncertainty~\citep{kuhn2023semantic,farquhar2024semantic}. Likelihood-weighted implementations use model scoring access, while empirical-frequency variants can operate on samples. C3's conceptual distinction is access to a second, contextually perturbed distribution, rather than an exclusive ability to support black-box evaluation.
 
+\paragraph{Prompt variation.}
+Self-Para-Consistency generates question paraphrases and selects a consistent answer~\citep{chen-etal-2024-self-para}. Code-validation work also uses prompt paraphrases and cross-program testing~\citep{wang2026paraphrasing}. Scenario-independent uncertainty estimation uses factor analysis across scenarios~\citep{wen2025scenario}. These approaches motivate direct comparisons under matched generation budgets. C3 specifies an unchanged task and added answer-neutral context, but shares the broader goal of learning from response variation. SPUQ likewise samples outputs under input perturbations and aggregates their variation to quantify uncertainty~\citep{gao-etal-2024-spuq}.
 
+\paragraph{External verification and opinion simulation.}
+FActScore measures the fraction of atomic claims supported by a knowledge source~\citep{min-etal-2023-factscore}; C3 measures behavior without retrieving factual evidence during score computation. These signals answer different questions. For opinion simulation, \citet{neumann2026opinions} evaluate logical consistency and stakeholder alignment. Our extension instead predicts proximity to a particular human-reference rating from contextual response behavior, and does not replace their broader quality checks.
+\end{revision}
+
+\begin{revision}
 \section{Conclusion}
-
-This work identifies cross-contextual consistency as a behavioral signal for evaluating LLM credibility: when a model’s answer is well-supported, it should remain stable under topic-aligned, content-neutral contextual variation. We operationalize this idea through C3, a black-box framework that compares generation distributions under original and perturbed contexts. Across 26 models and six benchmarks, C3 consistently aligns with correctness and factuality across reasoning, factual recall, long-form generation, and code generation. Beyond instance-level evaluation, C3 also provides a complementary diagnostic for benchmark analysis, helping distinguish stable understanding from brittle or systematically biased performance. These results suggest that controlled contextual perturbation offers a practical way to reveal answer fragility that standard accuracy-based evaluation can miss.
-
+C3 evaluates how generated answers respond to added context while preserving the original task. The expanded evidence links this intervention to task-specific quality and cutoff-group differences, while exposing important boundaries: stable errors remain possible, neutrality requires validation, and distributional stability can perform differently from cross-comparison agreement. Reporting these distinctions makes contextual probing a complementary behavioral diagnostic rather than a certificate of truthfulness or an identification of internal reasoning.
 
 \section*{Limitations}
+Neutrality is an operational design objective, not an intrinsic guarantee. Human validation covers a small MMLU sample, and aggregate accuracy differences can mask opposing effects. Averaging responses across premises can also conceal premise-specific shifts. A factorial ablation of the perturbation constraints and a task-stratified human audit of answer-equivalence judgments remain needed. Auxiliary generation, extraction, and judging can introduce bias and substantial cost even though the evaluated model is accessed through outputs alone.
 
-This work studies C3 across a broad but necessarily finite set of models, benchmarks, and experimental settings. Future work may extend the evaluation to additional tasks, languages, and application domains. Further exploration of alternative implementation choices may also help better understand how C3 can be adapted across different evaluation scenarios.
+The cutoff experiment compares matched questions about different facts and dates; it does not directly intervene on model memory. Documented cutoffs neither guarantee acquisition of older facts nor preclude inference of newer answers. Its MMD interaction estimate remains uncertain. The TopicMisinfo extension is limited to 50 claims and a particular annotator reference, excludes insufficiently parsed responses, and finds no uniform advantage over stronger same-prompt controls. Score scaling affects ECE; no universal probability calibration is established. Original benchmark tables are retained pending completion of the implementation and aggregation provenance checks in Appendix~\ref{app:revision_audit}.
 
-\section{Societal Impact}
+\section*{Ethical considerations}
+Contextual stability should not be used as a guarantee of truth, safety, or suitability for high-stakes decisions. Consistent errors and demographic stereotypes can persist across contexts. TopicMisinfo ratings characterize alignment with an annotator sample and do not justify replacing affected communities or human participants with LLMs. Human-annotation documentation, including the applicable consent, compensation, and review arrangements, must accompany the neutrality records; no institutional approval or exemption is asserted here without documentation.
+\end{revision}
 
-This work aims to improve the evaluation of LLM reliability by providing a black-box signal for identifying context-fragile generations. Such tools may help practitioners better detect uncertain, brittle, or potentially hallucinated outputs before deploying LLMs in higher-stakes settings. At the same time, C3 should not be treated as a guarantee of truthfulness or safety; a model can be consistent and still wrong. We note that this method is intended as a diagnostic aid rather than a replacement for human oversight, domain expertise, or task-specific safety evaluation.
-% \clearpage
-% \newpage
 \bibliographystyle{acl_natbib}
 \bibliography{citation}
-
-
-
 \clearpage
 \appendix
 
@@ -579,23 +489,20 @@ we employ the prompts detailed in Appendix~\ref{app:prompt for sampling}. By uti
 we collect a set of perturbations $\mathcal{E} = \{\epsilon_1, \dots, \epsilon_n\}$. 
 To ensure the diversity of $\mathcal{E}$, we filter out candidate noise that is semantically redundant with existing entries (details are provided in Appendix~\ref{app:diversity of noise}).
 
-\subsection{Diversity of Noise Sampling}\label{app:diversity of noise}
-We utilize GPT-4.1 to perform noise sampling, aiming to maximize the diversity of noise per question. It is well known that repeated generations from LLMs using the same prompt often produce semantically similar or even identical outputs. To ensure variety, we maintain a clean pool of samples by comparing each newly generated data point $\epsilon^*$ against an existing set $\mathcal{E} = \{\epsilon_1, \epsilon_2, \dots, \epsilon_n\}$ in embedding space. A new sample $\epsilon^*$ is retained only if its pairwise semantic similarity with the existing elements in $\mathcal{N}$ remains below a threshold $k$.
+\begin{revision}
+\subsection{Redundancy filtering and auxiliary paraphrases}
+\label{app:diversity of noise}
+The generator maintains a pool of premises and rejects candidates whose MPNet cosine similarity to an accepted premise exceeds the threshold~\citep{song2020mpnet}. To choose the threshold, the original calibration used 30 generated premises and 50 paraphrases of each, yielding within-premise pairwise similarities. The empirical fifth percentile was $0.8124$ (Figure~\ref{fig:rewrite distribution}). These paraphrases concern auxiliary premises, not the evaluation questions, and are not C3 test inputs.
 
-We compute embeddings using \textit{all-mpnet-base-v2} \citep{song2020mpnet} and measure similarity via cosine similarity. However, the choice of similarity threshold $k$ is typically heuristic and task-specific. In this work, we propose to empirically determine an appropriate $k$ specific to GPT-4.1's generation behavior, enabling us to maintain a semantically diverse pool.
-
-To do this, we sampled 30 premises generated by GPT-4.1 and used the same model to produce paraphrased versions using the prompt provided in Appendix \ref{app:prompt for paraphrasing}. For each original premise, we generated 50 paraphrases and embedded them using \textit{all-mpnet-base-v2}. Within each group of 50 rewrites, we computed all pairwise cosine similarities, resulting in $\binom{50}{2}$ similarity scores per group. Aggregating these across all groups yields the overall distribution of cosine similarities, representing GPT-4.1's implicit notion of semantic equivalence. The histogram of these results is shown in Figure \ref{fig:rewrite distribution}.
+This threshold is a redundancy heuristic. A tail probability conditional on sampled paraphrases does not determine the probability that an accepted premise is redundant, and it does not validate answer neutrality. No claim of a 5\% false-discovery bound follows from the calibration. The paraphrasing baseline is a separate evaluation procedure that rewrites questions.
+\end{revision}
 
 \begin{figure*}[t] 
     \centering
     \includegraphics[width=\textwidth]{rewrite_similarity_histogram.png}
-    \caption{The distribution of pairwise cosine similarities among GPT-4.1-generated paraphrases. The red line indicates the 5th percentile ($k=0.8124$), which serves as our empirical threshold for filtering semantic redundancy.}
+    \caption{\revised{Auxiliary premise-paraphrase cosine similarities used to choose a redundancy-filter threshold. The fifth percentile is $0.8124$. This heuristic does not bound the proportion of redundant premises accepted by the filter.}}
     \label{fig:rewrite distribution}
 \end{figure*}
-
-The threshold is determined at a significance level of $\alpha = 0.05$. This ensures that by retaining only those samples with a similarity below $k = 0.8124$, we have a statistical confidence that at most 5\% of the accepted samples are semantically redundant paraphrases.
-
-
 
 \subsection{Semantic Neutrality of Perturbations}
 \label{app:semantic neutrality}
@@ -1364,8 +1271,8 @@ To choose an appropriate number of trials, we conducted a case study to determin
 
 \section{Prompts}
 
-\subsection{The Prompt for Sampling}\label{app:prompt for sampling}
-\begin{PromptBox}{Prompt: LLMs as Noise Samplers}
+\subsection{\revised{Context-premise generation}}\label{app:prompt for sampling}
+\begin{PromptBox}{\revised{Prompt: Context-premise generation}}
 You are given the following question: {question}.
 
 Your task:
@@ -1382,8 +1289,8 @@ Requirements for the premise:
 Return ONLY a complete sentence.
 \end{PromptBox}
 
-\subsection{The Prompt for Sampling}\label{app:prompt for paraphrasing}
-\begin{PromptBox}{Prompt: Paraphrasing}
+\subsection{\revised{Auxiliary premise paraphrasing for filter calibration}}\label{app:prompt for paraphrasing}
+\begin{PromptBox}{\revised{Prompt: Auxiliary premise paraphrasing}}
 
 Please rewrite the following statement to express the same meaning using different 
 phrasing, while preserving its original logical content:\n\n{premise}
@@ -1481,7 +1388,7 @@ Answer:
 
 We evaluate C3 on 16 widely used LLMs spanning multiple families and scales: OpenAI’s GPT-4.1 series (4.1, 4.1-mini, 4.1-nano)~\citep{openai2024gpt4technicalreport}; Google’s Gemma-3 Instruct models (4B, 12B, 27B)~\citep{gemmateam2025gemma3technicalreport} and Gemini models (Gemini-2.5-Flash, Gemini-2.5-Flash-Lite)~\citep{comanici2025gemini25pushingfrontier}; Meta’s Llama-3 Instruct models (1B, 3B, 8B, 70B, 405B)~\citep{grattafiori2024llama3herdmodels}; and Mistral models (Small, Medium, Large)~\citep{jiang2024mixtralexperts}.
 
-We also conducted case studies on additional models; however, due to their characteristics: such as heavier reasoning processes or deprecated designs, they are often costly in time and computational resources. We therefore restrict these case studies to the MMLU High School Statistics benchmark. To study the temporal evolution of C3 in Figure~\ref{fig:workflow}, we additionally include earlier and newer frontier models, including GPT-3.5-Turbo~\citep{brown2020languagemodelsfewshotlearners}, GPT-4-Turbo, GPT-4o, and GPT-4o-mini~\citep{openai2024gpt4ocard}; GPT-5 (5, 5-mini, 5-nano)~\citep{singh2025openaigpt5card}; and additional Gemini releases (Gemini-2.5-Pro, Gemini-2.0-Flash, and Gemini-2.0-Flash-Lite)~\citep{geminiteam2025geminifamilyhighlycapable}. Across all experiments, we use temperature $T{=}1$ to probe typical stochastic generation behavior under standard decoding.
+We also conducted case studies on additional models; however, due to their characteristics: such as heavier reasoning processes or deprecated designs, they are often costly in time and computational resources. We therefore restrict these case studies to the MMLU High School Statistics benchmark. To study the temporal evolution of C3 in Figure~\ref{fig:workflow}, we additionally include earlier and newer frontier models, including GPT-3.5-Turbo~\citep{brown2020languagemodelsfewshotlearners}, GPT-4-Turbo, GPT-4o, and GPT-4o-mini~\citep{openai2024gpt4ocard}; GPT-5 (5, 5-mini, 5-nano)~\citep{singh2025openaigpt5card}; and additional Gemini releases (Gemini-2.5-Pro, Gemini-2.0-Flash, and Gemini-2.0-Flash-Lite)~\citep{geminiteam2025geminifamilyhighlycapable}. \revised{In the original benchmark experiments, we use temperature $T{=}1$} to probe typical stochastic generation behavior under standard decoding.
 \subsection{Evaluation Metrics} \label{app:Evaluation Metrics}
 We evaluate C3 and other baseline scores, all normalized to the range $[0, 1]$. A key aspect of these methods is to disclose the reliability of model generations: Their alignment with correctness or truthfulness. For each benchmark instance, we estimate an empirical model performance by aggregating outcomes over $n$ sampling trials (repeated samples of stochastic decoding) and taking the per-instance average. We then evaluate how well each score associated with instances aligns with this per-instance average performance using a combination of calibration and ranking metrics.
 
@@ -1517,18 +1424,11 @@ C3 (Web Source) & 0.247 & 0.801 & 0.355 & 0.894 \\
 \label{tab:differen source of noise}
 \end{table*}
 
-Although perturbations generated by GPT-4.1 are preferred in our main experiments because they consistently produce higher-quality generations and better satisfy the intended properties of diversity and content neutrality, C3 does not fundamentally depend on GPT-4.1 as the perturbation source. To test this, we compare GPT-4.1 perturbations with two alternative sources: (1) perturbations generated by the open-weight Qwen3-8B model, and (2) random web-sourced noise of approximately the same length sampled from RedPajama~\citep{together2023redpajama}, which contains internet-scraped text from a broad range of domains.
+\begin{revision}
+The source ablation compares GPT-4.1 premises, Qwen3-8B premises, and length-matched RedPajama snippets~\citep{together2023redpajama}. The original values are retained in Table~\ref{tab:differen source of noise}. GPT-4.1 has the lowest reported ECE, while Qwen3-8B has the highest AUROC among these sources. This supports evaluating more than one source but does not isolate why their behavior differs.
 
-\textbf{Effectiveness of noise.}
-As shown in Table~\ref{tab:differen source of noise}, C3 remains competitive when perturbations are generated from non-frontier sources. GPT-4.1 achieves the best ECE, AUPRC-P, and AUPRC-N, suggesting that higher-quality perturbations can improve calibration, especially in terms of probability calibration and precision-recall behavior. However, Qwen3-8B achieves the highest AUROC among the C3 variants and remains close to GPT-4.1 on AUPRC-P and AUPRC-N. Random web-sourced noise also preserves a meaningful calibration signal, outperforming or remaining competitive with the baseline methods on several metrics. These results suggest that the effectiveness of C3 is not solely an artifact of using a strong frontier model to generate perturbations. Instead, the core signal appears to come from measuring whether model outputs remain stable under semantically neutral contextual variation.
-
-\textbf{Computational efficiency.}
-It has to be admitted that using advanced model like GPT-4.1 can be costly and using smaller open-weight models substantially reduces the cost of perturbation generation. In our Qwen3-8B setting, we generated perturbations for 200 SimpleQA questions on a single GPU NVIDIA A100. We generated 30 samples per question, this corresponds to 6,000 accepted noise samples in 32.36 minutes after we applied filtering for diversity. This is the exact setting in the main experiment. The generation pipeline achieved 3.09 completed accepted samples per second. These results suggest that perturbation generation with smaller and open sourced model is practically feasible and can substantially reduce dependence on expensive frontier-model APIs.
-
-Randomly sampled in-the-wild corpus noise provides an even cheaper alternative. Unlike model-generated perturbations, this source does not require inference or prompt-specific generation: once a corpus such as RedPajama~\citep{together2023redpajama} is available, noise snippets of the desired length can be sampled almost instantly. Because these snippets are sampled independently of the original question, they are unlikely to contain answer-specific information, which gives them a degree of semantic neutrality. However, this neutrality comes at the cost of weaker topic alignment: unlike GPT-4.1 or Qwen3-8B perturbations, in-the-wild snippets are not explicitly generated to match the benchmark domain or capability being tested.
-
-As shown in Table~\ref{tab:differen source of noise}, corpus-based noise still preserves a useful C3 signal, but it is generally less effective than model-generated perturbations. This pattern suggests that topic alignment improves perturbation quality and strengthens the resulting C3 signal, while not being strictly necessary for C3 to remain informative. Web-sourced perturbations can therefore be viewed as a practical low-cost approximation when generation cost is a concern, rather than as a replacement for topic-aligned model-generated perturbations.
-
+Random corpus snippets avoid premise-generation inference but are not guaranteed answer-neutral or topically aligned. Independence from the question does not rule out accidental hints, misleading information, or distraction. Source changes confound topic alignment, diversity, style, and answer relevance, so this comparison cannot substitute for a component-wise ablation. Comparisons of end-to-end computational cost also need to count target-model generation and answer judging.
+\end{revision}
 
 \section{Ablation Study on MMD}\label{app:Ablation Study on MMD}
 \label{sec:mmd_ablation}
@@ -1556,40 +1456,21 @@ C3 (Cross Comparison)  & \cellcolor{gray!20}0.155 & 0.813 & \cellcolor{gray!20}0
 \end{tabular*}
 \end{table*}
 
-To test whether the effectiveness of C3 depends specifically on the MMD formulation, we replace the original MMD  distributional distance with a simpler cross-comparison score. Given generations from the original prompt $X=\{x_1,\ldots,x_n\}$ and generations from the perturbed prompt $Y=\{y_1,\ldots,y_m\}$, the cross-comparison variant directly measures the average pairwise agreement between the two sets:\[S_{\mathrm{cross}}(X,Y) = \frac{1}{nm}\sum_{i=1}^{n}\sum_{j=1}^{m} k(x_i,y_j),\]where $k(x_i,y_j)$ is an indicator function for answer equivalence:\[k(x_i,y_j)=\mathbf{1}[x_i \equiv y_j].\]
-Here, $x_i \equiv y_j$ means that the two generations give the same answer. For fixed-format tasks such as SimpleQA, this can be implemented by exact answer matching or by an equivalence judge when surface forms differ but the answer is semantically the same. As shown in Table~\ref{tab:mmd_ablation}, the cross-comparison remains competitive with the original MMD C3 score. It slightly improves ECE and AUPRC-P on SimpleQA, while MMD achieves higher AUROC and AUPRC-N. More importantly, both C3 variants outperform self-consistency, paraphrasing consistency, and self-report on most calibration and ranking metrics. This suggests that the C3 signal is not merely an artifact of the specific MMD distance. Instead, the useful signal appears to come from the broader perturbation comparison: when a model's generations remain equivalent across original and semantically perturbed contexts, its answers are more likely to be reliable; when the cross-context generations diverge, the answer is more likely to be fragile or incorrect. MMD remains our main choice because it provides a principled distributional distance that accounts for both within-set and cross-set similarities, but this ablation shows that a simpler indicator cross-comparison variant can preserve much of the same credibility signal.
+\begin{revision}
+Table~\ref{tab:mmd_ablation} retains the original SimpleQA comparison. Its MMD-labeled row achieves higher AUROC and AUPRC-N, while cross-comparison has lower ECE and higher AUPRC-P. The table supports reporting a trade-off rather than empirical dominance of one estimator. Cross-comparison is defined in Equation~\ref{eq:c3_cross}; because it depends on within-condition concentration, it is not simply an interchangeable distributional distance. Its different behavior on TopicMisinfo is reported in the main text. The precise normalization behind the original SimpleQA row remains part of the provenance audit below.
+\end{revision}
 
+\begin{revision}
+\section{Score definitions and implementation provenance}
+\label{app:Operationalization through MMD}
+Equations~\ref{eq:mmd_main}--\ref{eq:c3_mmd} give the indicator-kernel implementation reproduced for the new FreshQA and TopicMisinfo analyses. For empirical category frequencies $p_c=a_c/n$ and $q_c=b_c/m$, the cross term is $\sum_c p_cq_c$; the unbiased within-original term is $\sum_c a_c(a_c-1)/(n(n-1))$, and analogously for the perturbed sample. Clipping the unbiased estimate produces a bounded reported score, but the clipped statistic is no longer unbiased.
 
+MMD separates distributions only under suitable kernel assumptions. The equality kernel on a categorical answer space is suitable for comparing category distributions. An embedding dot-product kernel compares feature means and need not distinguish all distributions; raw cosine similarity can be negative. Pairwise LLM equivalence decisions may be asymmetric or non-transitive and are not automatically a positive-semidefinite kernel. These alternatives should therefore be described with their actual assumptions rather than assigned a universal characteristic-kernel guarantee.
 
-\section{Operationalization through MMD}\label{app:Operationalization through MMD}
-To quantify the distance between the generative distributions $P(Y|x)$ and $P(Y|x')$, we use Maximum Mean Discrepancy (MMD)~\citep{JMLR:v13:gretton12a}, a non-parametric kernel-based statistic for comparing two empirical distributions. Given finite sample sets $\mathcal{Y}$ and $\mathcal{Y}'$ of size $n$ and $m$, we compute the unbiased empirical estimate:
-\begin{equation}
-\begin{aligned}
-    &\widehat{\mathrm{MMD}}^2(\mathcal{Y}, \mathcal{Y}') \\
-    &= \frac{1}{n(n-1)} \sum_{i \neq j}^n 
-    k(\phi(y_i), \phi(y_j)) 
-    \\
-    &\quad + \frac{1}{m(m-1)} \sum_{i \neq j}^m 
-    k(\phi(y'_i), \phi(y'_j)) \\
-    &\quad - \frac{2}{nm} \sum_{i=1}^n \sum_{j=1}^m 
-    k(\phi(y_i), \phi(y'_j)).
-\end{aligned}
-\end{equation}
-Here, $\phi$ maps model generations into a task-appropriate representation, and $k$ is a kernel function that compares represented outputs. This estimator measures how much the empirical answer distribution under the original prompt differs from the answer distribution under the perturbed prompt. In the main experiments, we normalize this distance into a C3 score in $[0,1]$, where larger values indicate smaller cross-contextual shift and therefore greater answer stability.
+The cached TopicMisinfo routine named \texttt{c3\_categorical} computes $1-\frac12\lVert p-q\rVert_1$, which is total-variation stability, despite its original MMD label. The revision reports that score as TV and recomputes indicator-kernel MMD from the same extracted ratings. The cached CommonsenseQA notebook also contains a total-variation implementation, whereas the SimpleQA notebook contains a diagonal-including cosine-MMD calculation mapped by $1-\sqrt{\widehat D}/\sqrt 2$ and clipped to $[0,1]$. These are different estimators and transforms. They motivate treating the original table as reported results until the exact generating analysis for each row is reconciled.
 
-\textbf{Task-adaptive feature maps and kernel selection}
-The flexibility of choices of feature mapping function $\phi(\cdot)$ and kernel function $k(\cdot, \cdot)$ provide the flexibility of assessing generation of various types. The realization of $\phi$ and $k$ are adapted to the specific format of the model's output $y$ of the underlying task. For tasks with fixed output formats (e.g,. keywords, numbers, or multiple-choices), we could choose $\phi$ to be a mapping to categories, resulting in an indicator kernel $k(y, y') = \mathbb{I}(y = y')$. This setting enables the C3 to function as an distance between empirical probability mass functions, measuring categorical inconsistencies. Conversely, for open-ended generation (e.g,. coding, summarization, and essay writing), $\phi$ could be a embedding process from an embedding model that maps the generation to high dimensional spaces $h \in \mathbb{R}^D$. In these high-dimensional space, we employ a semantic kernel (typically a linear dot-product to measure the cos similarities). Even more flexibly, LLMs as Judges frameworks can be used directly to compare the if the two answers are the same or not regardless of the output formats.
-
-% \note{this reads too vague: what do you actually do? OK to discuss generalization, possibilities, etc as well}
-
-\textbf{Normalization and range of C3}
-To ensure C3 is an interpretable proxy for credibility, we transform the raw MMD distance into a normalized range of $[0, 1]$. In our framework, we assume a characteristic kernel $k$ that is bounded and normalized, satisfying $k(y, y) = 1$ and $0 \le k(y, y') \le 1$ (e.g., an indicator kernel or cosine similarity). Under these conditions, the squared MMD admits the theoretical upper bound $MMD^2(\mathcal{Y}, \mathcal{Y}') \leq 2$, which is attained when the two generative distributions are maximally separated (i.e., their cross-similarity approaches zero; equivalently, in fixed-format settings, outputs from the two sets completely mismatch). We define the final C3 by scaling this distance:
-$
-C3(x, x') = 1 - \frac{1}{2}\widehat{MMD}^2(\mathcal{Y}, \mathcal{Y}')
-$
-.A value of $C3 \approx 1$ indicates high credibility, where the model's output distribution remains invariant to semantic perturbations, suggesting consistent internal reasoning patterns and parametric memories. Conversely, $C3 \approx 0$ indicates low credibility, signaling that semantic variation in the input has caused a complete shift in the model's generative behavior, which is a symptom of factual fragility or reasoning inconsistencies.
-
-
+For equal sample sizes, both direct MMD and cross-comparison require a quadratic number of pairwise kernel evaluations; categorical counts permit a linear pass over responses plus a sum over categories. This computational observation does not quantify end-to-end cost for an LLM judge. The original source ablation is not a runtime study, and no measured cost advantage is claimed.
+\end{revision}
 
 \section{Benchmark Details}
 \label{app:benchmark_details_prompts}
@@ -1598,7 +1479,7 @@ We provide additional details on the six benchmarks used in our evaluation. SVAM
 
 For factuality-oriented evaluation, we use SimpleQA Verified~\citep{haas2025simpleqaverifiedreliablefactuality} and FActScore~\citep{min-etal-2023-factscore}. SimpleQA Verified consists of short-form fact-retrieval questions with verified answers, while FActScore evaluates long-form generations by decomposing outputs into atomic claims and checking whether each claim is supported by external evidence. Finally, HumanEval~\citep{DBLP:journals/corr/abs-2107-03374} evaluates code synthesis through unit tests.
 
-Together, these benchmarks span reasoning, factual recall, long-form factuality, and code generation, covering both constrained answer formats and open-ended generations. We include the prompts used for each benchmark below.
+\revised{These six benchmarks form the original evaluation. FreshQA and TopicMisinfo are additional diagnostic studies with separate protocols in Appendices~\ref{app:freshqa} and~\ref{app:topicmisinfo}.}
 
 
 
@@ -1630,5 +1511,30 @@ We also compare C3 with FActScore~\citep{min-etal-2023-factscore}, a factuality 
 
 
 
-% \input{checklist.tex}
+
+\input{revision/appendix-additions.tex}
+\begin{revision}
+\section{Extended descriptive results}
+\label{app:extended_results}
+The existing scaling and aggregated factuality figures are retained here to preserve the original evidence while keeping the main text focused on the contextual intervention and its controls. Their associations do not independently identify internal knowledge, training contamination, or a causal effect of model scale. The original macro and pooled summaries should be distinguished when reporting these results.
+\end{revision}
+
+\begin{figure}[t]
+
+    \centering
+    \includegraphics[width=\linewidth]{scaling_laws.png}
+    \caption{\revised{Existing descriptive scaling comparison. Colors indicate benchmarks; solid lines show AUROC and dashed lines ECE. The plot does not isolate scale from model-family or training differences, and no significance claim is inferred from its visual trend.}}
+    \label{fig:auroc_scaling_small_large_text}
+
+\end{figure}
+
+\begin{figure}[t]
+
+    \centering
+    \includegraphics[width=\linewidth]{alignment_Facuality.png}
+    \caption{\revised{Existing aggregated factuality comparison on FActScore and SimpleQA. The source manuscript reports Spearman correlations of $0.624$ and $0.642$, and AUROC values of $0.831$ and $0.821$, respectively. These differ from the macro averages in Table~\ref{tab:main_results}; the exact aggregation pipeline must be reconciled before interpreting the difference.}}
+    \label{fig:factuality}
+
+\end{figure}
+
 \end{document}

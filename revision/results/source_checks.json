@@ -1,0 +1,19 @@
+{
+  "status": "passed",
+  "checks": [
+    "balanced environments and braces",
+    "all inputs and figure assets present",
+    "unique labels and bibliography keys",
+    "all references and citations resolve in source",
+    "original table contents unchanged",
+    "baseline checksums unchanged",
+    "clean/marked body identical",
+    "two-column format retained",
+    "ARR limitations before bibliography"
+  ],
+  "cited_references": 34,
+  "approximate_main_text_words_excluding_floats": 2592,
+  "latex_compiled": false,
+  "pdf_visual_review": false,
+  "page_limit_verified": false
+}

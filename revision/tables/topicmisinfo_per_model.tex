@@ -1,0 +1,26 @@
+\begin{table*}[t]
+\centering\scriptsize\revisioncolor
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrrrrrrrr}
+\toprule
+Model & Claims & Valid orig. & Refusal & SC ECE & SC AUROC & MMD ECE & MMD AUROC & Cross ECE & Cross AUROC \\
+\midrule
+Gemini 2.5 Flash & 50 & 0.986 & 0.003 & 0.157 & 0.840 & 0.343 & 0.668 & 0.167 & 0.815 \\
+Gemini 2.5 Flash Lite & 50 & 0.986 & 0.012 & 0.168 & 0.744 & 0.307 & 0.658 & 0.158 & 0.787 \\
+Gemma 3 12B & 50 & 0.992 & 0.000 & 0.111 & 0.629 & 0.394 & 0.599 & 0.145 & 0.704 \\
+Gemma 3 27B & 50 & 0.993 & 0.000 & 0.280 & 0.771 & 0.604 & 0.503 & 0.183 & 0.806 \\
+Gemma 3 4B & 43 & 0.990 & 0.000 & 0.433 & 0.665 & 0.465 & 0.535 & 0.219 & 0.624 \\
+GPT-4.1 & 50 & 0.994 & 0.000 & 0.186 & 0.649 & 0.267 & 0.552 & 0.248 & 0.688 \\
+GPT-4.1 mini & 50 & 1.000 & 0.000 & 0.208 & 0.564 & 0.199 & 0.811 & 0.127 & 0.693 \\
+GPT-4.1 nano & 50 & 0.998 & 0.000 & 0.213 & 0.790 & 0.378 & 0.625 & 0.158 & 0.757 \\
+Llama 3.1 70B & 50 & 0.998 & 0.000 & 0.237 & 0.668 & 0.375 & 0.608 & 0.090 & 0.724 \\
+Llama 3.1 8B & 39 & 0.712 & 0.277 & 0.189 & 0.612 & 0.439 & 0.519 & 0.205 & 0.698 \\
+Llama 3.2 1B & 34 & 0.516 & 0.193 & 0.220 & 0.734 & 0.825 & 0.366 & 0.066 & 0.707 \\
+Llama 3.2 3B & 50 & 0.843 & 0.017 & 0.070 & 0.717 & 0.562 & 0.322 & 0.121 & 0.640 \\
+Mistral Medium 3 & 50 & 1.000 & 0.000 & 0.232 & 0.776 & 0.340 & 0.596 & 0.159 & 0.735 \\
+Mistral Small 24B & 47 & 0.999 & 0.000 & 0.280 & 0.643 & 0.394 & 0.394 & 0.246 & 0.594 \\
+\bottomrule
+\end{tabular}
+\caption{TopicMisinfo retained counts and model-level metrics. Valid orig. is the mean fraction of original response slots yielding a rating among retained claims; refusal averages identifiable refusals across both conditions. SC is plurality-based self-consistency. All score variants and metrics are retained in the accompanying CSV.}
+\label{tab:topic_models}
+\end{table*}

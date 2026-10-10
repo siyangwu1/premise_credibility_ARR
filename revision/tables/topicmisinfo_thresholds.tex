@@ -1,0 +1,30 @@
+\begin{table*}[t]
+\centering\scriptsize\revisioncolor
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{rlrrrr}
+\toprule
+Tolerance & Score & ECE & AUROC & AUPRC-P & AUPRC-N \\
+\midrule
+0.5 & Plurality & 0.336 & 0.700 & 0.611 & 0.765 \\
+0.5 & Same-prompt pairwise & 0.242 & 0.726 & 0.624 & 0.780 \\
+0.5 & Same-prompt concentration & 0.277 & 0.732 & 0.628 & 0.784 \\
+0.5 & C3 (MMD) & 0.582 & 0.554 & 0.449 & 0.712 \\
+0.5 & C3 (TV) & 0.411 & 0.649 & 0.596 & 0.763 \\
+0.5 & C3 (cross-comparison) & 0.205 & 0.712 & 0.640 & 0.803 \\
+1.0 & Plurality & 0.213 & 0.700 & 0.741 & 0.610 \\
+1.0 & Same-prompt pairwise & 0.179 & 0.716 & 0.759 & 0.618 \\
+1.0 & Same-prompt concentration & 0.187 & 0.718 & 0.766 & 0.617 \\
+1.0 & C3 (MMD) & 0.421 & 0.554 & 0.593 & 0.539 \\
+1.0 & C3 (TV) & 0.277 & 0.638 & 0.696 & 0.574 \\
+1.0 & C3 (cross-comparison) & 0.164 & 0.712 & 0.764 & 0.613 \\
+1.5 & Plurality & 0.174 & 0.651 & 0.784 & 0.468 \\
+1.5 & Same-prompt pairwise & 0.210 & 0.661 & 0.803 & 0.475 \\
+1.5 & Same-prompt concentration & 0.201 & 0.667 & 0.806 & 0.477 \\
+1.5 & C3 (MMD) & 0.322 & 0.522 & 0.684 & 0.376 \\
+1.5 & C3 (TV) & 0.221 & 0.590 & 0.754 & 0.405 \\
+1.5 & C3 (cross-comparison) & 0.225 & 0.643 & 0.796 & 0.449 \\
+\bottomrule
+\end{tabular}
+\caption{Sensitivity to the tolerance defining alignment with the human reference. Values are macro averages over the retained per-model samples; labels, not scores, change with the tolerance.}
+\label{tab:topic_tolerance}
+\end{table*}

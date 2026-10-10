@@ -1,0 +1,127 @@
+{
+  "equivalence_test": {
+    "contrast": "format distance minus decoding distance",
+    "estimate": 0.014130921052631574,
+    "ci_90": [
+      0.008122960526315785,
+      0.020505953947368417
+    ],
+    "margin": 0.05,
+    "equivalent": true
+  },
+  "contrasts": [
+    {
+      "contrast": "context distance minus format distance",
+      "estimate": 0.021348684210526315,
+      "ci_95": [
+        0.010741907894736844,
+        0.03159078947368421
+      ],
+      "one_sided_sign_flip_p": 0.0006499675016249188,
+      "clusters": 25
+    },
+    {
+      "contrast": "interaction: post-minus-pre context-minus-format",
+      "estimate": 0.026042105263157884,
+      "ci_95": [
+        -0.0021408881578947434,
+        0.05196220394736837
+      ],
+      "one_sided_sign_flip_p": 0.040697965101744914,
+      "clusters": 25
+    }
+  ],
+  "cutoff_effects": [
+    {
+      "metric": "c3_decode",
+      "pre_minus_post": 0.00505000000000001,
+      "ci_95_low": 0.0018354934210526436,
+      "ci_95_high": 0.00847907894736842
+    },
+    {
+      "metric": "c3_format",
+      "pre_minus_post": 0.003964473684210525,
+      "ci_95_low": -0.010575000000000008,
+      "ci_95_high": 0.019344835526315794
+    },
+    {
+      "metric": "c3_context",
+      "pre_minus_post": 0.030006578947368415,
+      "ci_95_low": 0.00630263157894737,
+      "ci_95_high": 0.05374358552631578
+    },
+    {
+      "metric": "accuracy_original_a",
+      "pre_minus_post": 0.5329999999999999,
+      "ci_95_low": 0.38849999999999996,
+      "ci_95_high": 0.6714999999999999
+    },
+    {
+      "metric": "accuracy_context",
+      "pre_minus_post": 0.553,
+      "ci_95_low": 0.4105,
+      "ci_95_high": 0.69
+    }
+  ],
+  "cross_comparison_equivalence_test": {
+    "contrast": "format distance minus decoding distance",
+    "estimate": 0.033999999999999996,
+    "ci_90": [
+      0.021862500000000003,
+      0.04682562499999999
+    ],
+    "margin": 0.05,
+    "equivalent": true
+  },
+  "cross_comparison_contrasts": [
+    {
+      "contrast": "context distance minus format distance",
+      "estimate": 0.041824999999999994,
+      "ci_95": [
+        0.023962499999999994,
+        0.059875312499999965
+      ],
+      "one_sided_sign_flip_p": 0.00014999250037498125,
+      "clusters": 25
+    },
+    {
+      "contrast": "interaction: post-minus-pre context-minus-format",
+      "estimate": 0.05225,
+      "ci_95": [
+        0.009474999999999982,
+        0.09447562499999997
+      ],
+      "one_sided_sign_flip_p": 0.012899355032248387,
+      "clusters": 25
+    }
+  ],
+  "cross_comparison_cutoff_effects": [
+    {
+      "metric": "c3_cross_decode",
+      "pre_minus_post": 0.23300000000000004,
+      "ci_95_low": 0.106998125,
+      "ci_95_high": 0.34780374999999963
+    },
+    {
+      "metric": "c3_cross_format",
+      "pre_minus_post": 0.24965,
+      "ci_95_low": 0.12477375000000002,
+      "ci_95_high": 0.3643012499999999
+    },
+    {
+      "metric": "c3_cross_context",
+      "pre_minus_post": 0.3019,
+      "ci_95_low": 0.17794999999999997,
+      "ci_95_high": 0.41740249999999973
+    }
+  ],
+  "bootstrap": {
+    "cluster": "match_id (retains both bins and all models)",
+    "samples": 20000,
+    "seed": 20250725
+  },
+  "permutation": {
+    "method": "cluster-level random sign flip",
+    "samples": 20000
+  }
+}

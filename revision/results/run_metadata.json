@@ -1,0 +1,39 @@
+{
+  "topic_models": 14,
+  "topic_claims_sampled": 50,
+  "topic_retained_model_claims": 663,
+  "topic_claims_min": 34,
+  "topic_claims_max": 50,
+  "topic_common_claims": 25,
+  "freshqa_questions": 50,
+  "freshqa_models": 4,
+  "freshqa_samples_per_arm": 20,
+  "freshqa_successful_generations": {
+    "gemma-3-27b-it.jsonl": {
+      "original_a": 1000,
+      "original_b": 1000,
+      "format": 1000,
+      "context": 1000
+    },
+    "gpt-4.1-mini.jsonl": {
+      "original_a": 1000,
+      "original_b": 1000,
+      "format": 1000,
+      "context": 1000
+    },
+    "gpt-4.1.jsonl": {
+      "original_a": 1000,
+      "original_b": 1000,
+      "format": 1000,
+      "context": 1000
+    },
+    "llama-3.1-70b-instruct.jsonl": {
+      "original_a": 1000,
+      "original_b": 1000,
+      "format": 1000,
+      "context": 1000
+    }
+  },
+  "provenance": "Offline reanalysis of cached outputs; no new model generations or human annotations.",
+  "human_neutrality": "94/100 unanimous judgments reported by authors in rebuttal; raw annotations not located."
+}
